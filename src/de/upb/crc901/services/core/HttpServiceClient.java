@@ -75,35 +75,32 @@ public class HttpServiceClient {
 		String service = opFQName.substring(0, opFQName.indexOf("::"));
 		String opName = opFQName.substring(service.length() + 2);
 
-		/* setup connection */
-		URL url = new URL("http://" + service + "/" + opName);
-		HttpURLConnection con = (HttpURLConnection) url.openConnection();
-		con.setRequestMethod("POST");
-
-		/* send data */
-		con.setDoOutput(true);
-		DataOutputStream wr = new DataOutputStream(con.getOutputStream());
-		SequentialCompositionSerializer compositionSerializer = new SequentialCompositionSerializer();
+		/* prepare data */
+		// TODO coreography should have a indexof method
 		int index = 0;
 		for (OperationInvocation opInv : coreography) {
 			if (opInv.equals(call))
 				break;
 			index++;
 		}
-		for (String input : additionalInputs.keySet()) {
-			Object inputObject = additionalInputs.get(input);
-			String serialization;
-			if (inputObject instanceof Number || inputObject instanceof String)
-				serialization = inputObject.toString();
-			else
-				serialization = ((inputObject instanceof JsonNode) ? (JsonNode) inputObject : otms.objectToJson(inputObject)).toString();
-			wr.writeBytes("inputs[" + input + "]=" + serialization + "&");
+		// get the coreography string
+		String serializedCoreography = null;
+		if (coreography.iterator().hasNext()) { // if coreography is not empty // TODO coreography::isEmpty method
+			serializedCoreography = new SequentialCompositionSerializer().serializeComposition(coreography);
 		}
-		if (coreography.iterator().hasNext()) {
-			String serializedCoreography = compositionSerializer.serializeComposition(coreography);
-			String urlEncoded = URLEncoder.encode(serializedCoreography, "UTF-8");
-			wr.writeBytes("coreography=" + serializedCoreography + "&currentindex=" + index);
-		}
+		// create body, encode it and write it to the outputstream.
+		HttpBody body = new HttpBody(additionalInputs, serializedCoreography, index);
+		String encoding = body.encode(otms);
+
+		/* setup connection */
+		URL url = new URL("http://" + service + "/" + opName);
+		HttpURLConnection con = (HttpURLConnection) url.openConnection();
+		con.setRequestMethod("POST");
+		con.setDoOutput(true);
+		
+		/* send data */
+		DataOutputStream wr = new DataOutputStream(con.getOutputStream());
+		wr.writeBytes(encoding);
 		wr.flush();
 		wr.close();
 

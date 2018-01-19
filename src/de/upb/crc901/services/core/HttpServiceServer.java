@@ -106,7 +106,7 @@ public class HttpServiceServer {
 
 				/* initiate state with the non-constant inputs given in post (non-int and non-doubles are treated as strings) */
 				HttpBody body = HttpBody.decode(t, otms);
-				Map<String, Object> initialState = body.state;
+				Map<String, Object> initialState = body.getInputs();
 				//Map<String, Object> post = body.params;
 				Map<String, Object> state = new HashMap<>(initialState);
 				logger.info("Input keys are: {}", initialState.keySet());

@@ -41,12 +41,14 @@ public final class HttpBody {
 	 */
 	public final static String 	encoding = "utf-8";
 	
-	private final Map<String, Object> params;
-	public final Map<String, Object> state;
+	public final Map<String, Object> inputsField;
+	private final String coreographyField;
+	private final int currentIndexField;
 	
-	private HttpBody(Map<String, Object> params, Map<String, Object> state) {
-		this.state = state;
-		this.params = params;
+	HttpBody(Map<String, Object> inputs, String corepgraphy, int currentIndex) {
+		this.inputsField = inputs;
+		this.coreographyField = corepgraphy;
+		this.currentIndexField = currentIndex;
 	}
 	
 	/**
@@ -54,15 +56,15 @@ public final class HttpBody {
 	 * @return true, if there is a coreography entry.
 	 */
 	public boolean containsCoreography() {
-		return params.containsKey(HttpBody.coreography);
+		return coreographyField != null;
 	}
 	/**
-	 * Returns the coreography value from the params map.
+	 * Returns the coreography value from the params map. "" if there is no entry.
 	 * @return coreography string.
 	 */
 	public String getCoreographyString() {
 		if(containsCoreography()) {
-			return params.get(HttpBody.coreography).toString();
+			return coreographyField;
 		}
 		else {
 			return "";
@@ -70,19 +72,50 @@ public final class HttpBody {
 	}
 	/**
 	 * Current Index. 
-	 * @return the current index value from the map if it is present and is Integerparsable. Else 0 is returned.
+	 * @return the current index value from the map if it is present and is Integer-parsable. Else 0 is returned.
 	 */
 	public int getCurrentIndex() {
-		int index = 0;
-		if(params.containsKey(HttpBody.currentindex)) {
-			String indexString = params.get(HttpBody.currentindex).toString();
-			try {
-				index = Integer.parseInt(indexString);
-			} catch(NumberFormatException nfe) {
-				nfe.printStackTrace();
-			}
+		return currentIndexField;
+	}
+	
+	/**
+	 * Returns the inputs.
+	 * @return Inputs
+	 */
+	public Map<String, Object> getInputs() {
+		return inputsField;
+	}
+	
+
+	/**
+	 * Encodes this instance and returns the string to be sent in a http body. 
+	 * @param otms The marshaling system used to parse the input objects in inputsField to JsonNodes.
+	 * @return string encoding of this instance.
+	 */
+	public String encode(OntologicalTypeMarshallingSystem otms) {
+		StringBuilder encoding = new StringBuilder();
+		
+		// append inputs to encoding
+		for (String input : inputsField.keySet()) {
+			Object inputObject = inputsField.get(input);
+			String serialization;
+			if (inputObject instanceof Number || inputObject instanceof String)
+				serialization = inputObject.toString();
+			else
+				serialization = ((inputObject instanceof JsonNode) ? (JsonNode) inputObject : otms.objectToJson(inputObject)).toString();
+			encoding.append("inputs[" + input + "]=");
+			encoding.append(serialization);
+			encoding.append("&");
 		}
-		return index;
+		
+		// append coreography
+		encoding.append(HttpBody.coreography + "=");
+		encoding.append(this.coreographyField);
+		// append current string
+		encoding.append("&" + HttpBody.currentindex + "=");
+		encoding.append(this.currentIndexField);
+		
+		return encoding.toString();
 	}
 	
 	/**
@@ -97,7 +130,18 @@ public final class HttpBody {
 		String decodedBody = readBody(exchange);
 		Map<String, Object> params = parseBodyIntoMap(decodedBody);
 		Map<String, Object> inputs = jsonDeserialiseInputs(params, otms);
-		return new HttpBody(params, inputs);
+		String coreo = params.get(HttpBody.coreography).toString();
+		// get current index
+		int index = 0;
+		if(params.containsKey(HttpBody.currentindex)) {
+			String indexString = params.get(HttpBody.currentindex).toString();
+			try {
+				index = Integer.parseInt(indexString);
+			} catch(NumberFormatException nfe) {
+				nfe.printStackTrace();
+			}
+		}
+		return new HttpBody(inputs, coreo, index);
 	}
 	/**
 	 * Reads Post's Body from HttpExchange's input stream. 
@@ -199,4 +243,6 @@ public final class HttpBody {
 		}
 		return inputs;
 	}
+	
+	
 }
