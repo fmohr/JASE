@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -104,21 +105,11 @@ public class HttpServiceServer {
 				String objectId = parts[1];
 
 				/* initiate state with the non-constant inputs given in post (non-int and non-doubles are treated as strings) */
-				Map<String, Object> initialState = new HashMap<>();
-				Map<String, Object> post = parsePostParameters(t);
-				for (String input : post.keySet()) {
-					if (!input.startsWith("inputs["))
-						continue;
-					String index = input.substring(7, input.length() - 1);
-					JsonNode inputObject = new ObjectMapper().readTree(post.get(input).toString());
-					if (!inputObject.has("type"))
-						throw new IllegalArgumentException("Input " + index + " has no type attribute!");
-					if (!otms.isKnownType(inputObject.get("type").asText()))
-						throw new IllegalArgumentException("Ontological type of of input " + index + " is not known to the system!");
-					initialState.put(index, inputObject);
-				}
-				logger.info("Input keys are: {}", initialState.keySet());
+				HttpBody body = HttpBody.decode(t, otms);
+				Map<String, Object> initialState = body.state;
+				//Map<String, Object> post = body.params;
 				Map<String, Object> state = new HashMap<>(initialState);
+				logger.info("Input keys are: {}", initialState.keySet());
 
 				/*
 				 * analyze choreography in order to see what we actually will execute right away: 1. move to position of current call; 2. compute all subsequent calls on same host and on services
@@ -127,11 +118,11 @@ public class HttpServiceServer {
 				SequentialComposition comp = null;
 				SequentialComposition subsequenceComp = new SequentialComposition(new CompositionDomain());
 				OperationInvocation invocationToMakeFromHere = null;
-				if (post.containsKey("coreography")) {
+				if (body.containsCoreography()) {
 					SequentialCompositionSerializer srs = new SequentialCompositionSerializer();
 
-					comp = srs.readComposition(post.get("coreography").toString());
-					int currentIndex = Integer.parseInt(post.get("currentindex").toString());
+					comp = srs.readComposition(body.getCoreographyString());
+					int currentIndex = body.getCurrentIndex();
 					Iterator<OperationInvocation> it = comp.iterator();
 					for (int i = 0; i < currentIndex; i++) {
 						it.next();
@@ -479,52 +470,6 @@ public class HttpServiceServer {
 		server.createContext("/", new JavaClassHandler());
 		server.start();
 		logger.info("Server is up ...");
-	}
-
-	private Map<String, Object> parsePostParameters(HttpExchange exchange) throws IOException {
-		if ((!"post".equalsIgnoreCase(exchange.getRequestMethod())))
-			throw new UnsupportedEncodingException("No post request");
-		Map<String, Object> parameters = new HashMap<String, Object>();
-		BufferedReader br = new BufferedReader(new InputStreamReader(exchange.getRequestBody(), "utf-8"));
-		String query = br.readLine();
-		parseQuery(query, parameters);
-		return parameters;
-	}
-
-	@SuppressWarnings("unchecked")
-	public void parseQuery(String query, Map<String, Object> parameters) throws UnsupportedEncodingException {
-
-		if (query != null) {
-			String pairs[] = query.split("[&]");
-			for (String pair : pairs) {
-				String param[] = pair.split("[=]");
-				String key = null;
-				String value = null;
-				if (param.length > 0) {
-					key = URLDecoder.decode(param[0], System.getProperty("file.encoding"));
-				}
-
-				if (param.length > 1) {
-					value = URLDecoder.decode(param[1], System.getProperty("file.encoding"));
-				}
-
-				if (parameters.containsKey(key)) {
-					Object obj = parameters.get(key);
-					if (obj instanceof List<?>) {
-						List<String> values = (List<String>) obj;
-						values.add(value);
-
-					} else if (obj instanceof String) {
-						List<String> values = new ArrayList<String>();
-						values.add((String) obj);
-						values.add(value);
-						parameters.put(key, values);
-					}
-				} else {
-					parameters.put(key, value);
-				}
-			}
-		}
 	}
 
 	public void shutdown() {

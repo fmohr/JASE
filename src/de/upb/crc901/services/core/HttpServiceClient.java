@@ -90,7 +90,6 @@ public class HttpServiceClient {
 				break;
 			index++;
 		}
-
 		for (String input : additionalInputs.keySet()) {
 			Object inputObject = additionalInputs.get(input);
 			String serialization;
@@ -98,10 +97,12 @@ public class HttpServiceClient {
 				serialization = inputObject.toString();
 			else
 				serialization = ((inputObject instanceof JsonNode) ? (JsonNode) inputObject : otms.objectToJson(inputObject)).toString();
-			wr.writeBytes("inputs[" + input + "]=" + URLEncoder.encode(serialization, "UTF-8") + "&");
+			wr.writeBytes("inputs[" + input + "]=" + serialization + "&");
 		}
 		if (coreography.iterator().hasNext()) {
-			wr.writeBytes("coreography=" + URLEncoder.encode(compositionSerializer.serializeComposition(coreography), "UTF-8") + "&currentindex=" + index);
+			String serializedCoreography = compositionSerializer.serializeComposition(coreography);
+			String urlEncoded = URLEncoder.encode(serializedCoreography, "UTF-8");
+			wr.writeBytes("coreography=" + serializedCoreography + "&currentindex=" + index);
 		}
 		wr.flush();
 		wr.close();
