@@ -225,10 +225,10 @@ public final class HttpBody {
 		Map<String, Object> inputs = new HashMap<>();
 		for (String inputName : params.keySet()) {
 			if (!inputName.startsWith(HttpBody.inputs)) {
-				// Continue to the next parameterKey if the parameter is not a input.
+				// Continue to the next parameterKey if the parameter is not an input.
 				continue;
 			}
-			// Indexed are noted in brackets.
+			// Indexes are noted in brackets.
 			// Extract index from brackets. e.g.: inputName =  "inputs[i1]" -> index = "i1"
 			String index = StringUtils.substringBetween(inputName, "[", "]"); 
 			String inputStringValue = params.get(inputName).toString();

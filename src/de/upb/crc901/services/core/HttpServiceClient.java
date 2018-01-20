@@ -114,6 +114,7 @@ public class HttpServiceClient {
 		}
 		br.close();
 		con.disconnect();
+		
 		JsonNode root = new ObjectMapper().readTree(content.toString());
 		ServiceCompositionResult result = new ServiceCompositionResult();
 		Iterator<String> it = root.fieldNames();

@@ -1,0 +1,4 @@
+x_norm = localhost:5000/sklearn.preprocessing::normalize({X=x_data});  
+model = sklearn.linear_model.LinearRegression::__construct({,});  
+empty = model::fit({X=x_norm, y=y_data});    
+prediction = model::predict({X=x_test});

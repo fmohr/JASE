@@ -24,7 +24,13 @@ package de.upb.crc901.services;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import javax.swing.JOptionPane;
@@ -32,6 +38,10 @@ import javax.swing.JOptionPane;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import Catalano.Imaging.FastBitmap;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
@@ -43,6 +53,9 @@ import de.upb.crc901.services.core.ServiceCompositionResult;
 import jaicore.basic.FileUtil;
 import jaicore.basic.MathExt;
 import jaicore.ml.WekaUtil;
+import jaicore.ml.core.SimpleInstanceImpl;
+import jaicore.ml.core.SimpleInstancesImpl;
+import org.junit.Assert;
 import weka.classifiers.Classifier;
 import weka.classifiers.trees.RandomTree;
 import weka.core.Instance;
@@ -112,7 +125,59 @@ public class ExampleTester {
 		FastBitmap result = otms.jsonToObject(resource.get("fb3"), FastBitmap.class);
 		JOptionPane.showMessageDialog(null, result.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
 	}
+	
+	@Test
+	/**
+	 * Tests compatibility with pase server. Note have run compserver.sh from Pase before running these tests.
+	 * @throws Exception
+	 */
+	public void testPaseComposition1() throws Exception {
+		List<String> composition_list = FileUtil.readFileAsList("testrsc/pase_composition1.txt");
+        SequentialComposition pase_composition = sqs.readComposition(composition_list);
 
+        // Parse inputs from 'testrsc/pase_composition1_data.json' to Instances and Instance
+        // Until the marshalling system is implemented the client has to parse the data.
+        byte[] encoded = Files.readAllBytes(Paths.get("testrsc/pase_composition1_data.json"));
+        String data_string = new String(encoded, Charset.defaultCharset());
+        encoded = null; 
+        JsonNode data_dict = new ObjectMapper().readTree(data_string);
+        JsonNode x_data = data_dict.get("x_data");
+        JsonNode y_data = data_dict.get("y_data");
+        JsonNode x_test = data_dict.get("x_test");
+        jaicore.ml.interfaces.Instances parsed_x_data = new SimpleInstancesImpl(x_data);
+        jaicore.ml.interfaces.Instance parsed_y_data = new SimpleInstanceImpl(y_data);
+        jaicore.ml.interfaces.Instances parsed_x_test = new SimpleInstancesImpl(x_test);
+        Map<String, Object> additionalInputs = new HashMap<>();
+        additionalInputs.put("x_data", parsed_x_data);
+        additionalInputs.put("y_data", parsed_y_data);
+        additionalInputs.put("x_test", parsed_x_test);
+        
+        ServiceCompositionResult resource = client.invokeServiceComposition(pase_composition, additionalInputs);
+        
+        // check if predicitons are correct:
+        double[] exptectedPredictions = {-0.236, 50.641, 110.041, 142.269, 179.063, 215.796, 216.136, 246.181, 343.532, 459.935}; // manually wrote this array down.
+		// extract perdiciton array:
+		List<Double> predictions = new ObjectMapper().readValue(resource.get("prediction").traverse(), new TypeReference<ArrayList<Double>>(){});
+		// compare one by one
+		for(int i = 0; i < exptectedPredictions.length; i++){
+			
+			Assert.assertEquals(predictions.get(i), exptectedPredictions[i], 0.01);
+		}
+	}
+	
+	@Test
+	/**
+	 * Tests compatibility with pase server. Note have run compserver.sh from Pase before running these tests.
+	 * @throws Exception
+	 */
+	public void testPaseComposition2() throws Exception {
+		List<String> composition_list = FileUtil.readFileAsList("testrsc/pase_composition2.txt");
+        SequentialComposition pase_composition = sqs.readComposition(composition_list);
+        ServiceCompositionResult resource = client.invokeServiceComposition(pase_composition);
+        Assert.assertEquals(7, resource.get("f2").intValue());
+        
+	}
+	
 	@After
 	public void suhtdown() {
 		System.out.println("Shutting down ...");
