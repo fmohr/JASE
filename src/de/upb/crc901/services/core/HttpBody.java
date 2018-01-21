@@ -108,12 +108,14 @@ public final class HttpBody {
 			encoding.append("&");
 		}
 		
-		// append coreography
-		encoding.append(HttpBody.coreography + "=");
-		encoding.append(this.coreographyField);
-		// append current string
-		encoding.append("&" + HttpBody.currentindex + "=");
-		encoding.append(this.currentIndexField);
+		// append coreography if not null
+		if(this.coreographyField != null) { 
+			encoding.append(HttpBody.coreography + "=");
+			encoding.append(this.coreographyField);
+			// append current string
+			encoding.append("&" + HttpBody.currentindex + "=");
+			encoding.append(this.currentIndexField);
+		}
 		
 		return encoding.toString();
 	}
@@ -130,7 +132,15 @@ public final class HttpBody {
 		String decodedBody = readBody(exchange);
 		Map<String, Object> params = parseBodyIntoMap(decodedBody);
 		Map<String, Object> inputs = jsonDeserialiseInputs(params, otms);
-		String coreo = params.get(HttpBody.coreography).toString();
+		
+		String coreo; 
+		// assign coreography string, based on if it is available.
+		if(params.containsKey(HttpBody.coreography)) {
+			coreo = params.get(HttpBody.coreography).toString();
+		}
+		else {
+			coreo = null;
+		}
 		// get current index
 		int index = 0;
 		if(params.containsKey(HttpBody.currentindex)) {
