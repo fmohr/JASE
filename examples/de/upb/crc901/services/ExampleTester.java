@@ -55,6 +55,8 @@ import jaicore.basic.MathExt;
 import jaicore.ml.WekaUtil;
 import jaicore.ml.core.SimpleInstanceImpl;
 import jaicore.ml.core.SimpleInstancesImpl;
+import jaicore.ml.core.SimpleLabeledInstancesImpl;
+
 import org.junit.Assert;
 import weka.classifiers.Classifier;
 import weka.classifiers.trees.RandomTree;
@@ -120,10 +122,10 @@ public class ExampleTester {
 		System.out.println(sqs.serializeComposition(composition));
 		File imageFile = new File("testrsc/FelixMohr.jpg");
 		FastBitmap fb = new FastBitmap(imageFile.getAbsolutePath());
-		JOptionPane.showMessageDialog(null, fb.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
+//		JOptionPane.showMessageDialog(null, fb.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
 		ServiceCompositionResult resource = client.invokeServiceComposition(composition, fb);
 		FastBitmap result = otms.jsonToObject(resource.get("fb3"), FastBitmap.class);
-		JOptionPane.showMessageDialog(null, result.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
+//		JOptionPane.showMessageDialog(null, result.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
 	}
 	
 	@Test
@@ -132,6 +134,7 @@ public class ExampleTester {
 	 * @throws Exception
 	 */
 	public void testPaseComposition1() throws Exception {
+		//client.callServiceOperation("localhost:5000/blubb::__construct", 1, 2 ,3);
 		List<String> composition_list = FileUtil.readFileAsList("testrsc/pase_composition1.txt");
         SequentialComposition pase_composition = sqs.readComposition(composition_list);
 
@@ -141,27 +144,23 @@ public class ExampleTester {
         String data_string = new String(encoded, Charset.defaultCharset());
         encoded = null; 
         JsonNode data_dict = new ObjectMapper().readTree(data_string);
-        JsonNode x_data = data_dict.get("x_data");
-        JsonNode y_data = data_dict.get("y_data");
-        JsonNode x_test = data_dict.get("x_test");
-        jaicore.ml.interfaces.Instances parsed_x_data = new SimpleInstancesImpl(x_data);
-        jaicore.ml.interfaces.Instance parsed_y_data = new SimpleInstanceImpl(y_data);
-        jaicore.ml.interfaces.Instances parsed_x_test = new SimpleInstancesImpl(x_test);
+        JsonNode training_set = data_dict.get("training_set");
+        JsonNode prediction_set = data_dict.get("prediction_set");
+        jaicore.ml.interfaces.LabeledInstances training_data = new SimpleLabeledInstancesImpl(training_set);
+        jaicore.ml.interfaces.Instances prediction_data = new SimpleInstancesImpl(prediction_set);
         Map<String, Object> additionalInputs = new HashMap<>();
-        additionalInputs.put("x_data", parsed_x_data);
-        additionalInputs.put("y_data", parsed_y_data);
-        additionalInputs.put("x_test", parsed_x_test);
+        additionalInputs.put("training_data", training_data);
+        additionalInputs.put("prediction_data", prediction_data);
         
         ServiceCompositionResult resource = client.invokeServiceComposition(pase_composition, additionalInputs);
         
         // check if predicitons are correct:
-        double[] exptectedPredictions = {-0.236, 50.641, 110.041, 142.269, 179.063, 215.796, 216.136, 246.181, 343.532, 459.935}; // manually wrote this array down.
+        String[] exptectedPredictions = {"C", "C", "D", "D", "D", "B", "A", "C", "C", "C", "C", "D", "D", "A", "A", "C", "D", "D", "C", "D"}; // manually wrote this array down.
 		// extract perdiciton array:
-		List<Double> predictions = new ObjectMapper().readValue(resource.get("prediction").traverse(), new TypeReference<ArrayList<Double>>(){});
+		List<Double> predictions = new ObjectMapper().readValue(resource.get("prediction").traverse(), new TypeReference<ArrayList<String>>(){});
 		// compare one by one
 		for(int i = 0; i < exptectedPredictions.length; i++){
-			
-			Assert.assertEquals(predictions.get(i), exptectedPredictions[i], 0.01);
+			Assert.assertEquals(exptectedPredictions[i], predictions.get(i));
 		}
 	}
 	
@@ -174,8 +173,8 @@ public class ExampleTester {
 		List<String> composition_list = FileUtil.readFileAsList("testrsc/pase_composition2.txt");
         SequentialComposition pase_composition = sqs.readComposition(composition_list);
         ServiceCompositionResult resource = client.invokeServiceComposition(pase_composition);
-        Assert.assertEquals(7, resource.get("f2").intValue());
-        
+        Assert.assertEquals(5, resource.get("f2").intValue());
+        Assert.assertEquals(5, resource.get("f5").intValue());
 	}
 	
 	@After
