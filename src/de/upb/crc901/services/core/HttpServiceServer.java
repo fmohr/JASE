@@ -60,6 +60,7 @@ import com.sun.net.httpserver.HttpServer;
 import de.upb.crc901.configurationsetting.compositiondomain.CompositionDomain;
 import de.upb.crc901.configurationsetting.logic.LiteralParam;
 import de.upb.crc901.configurationsetting.logic.VariableParam;
+import de.upb.crc901.configurationsetting.operation.Operation;
 import de.upb.crc901.configurationsetting.operation.OperationInvocation;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
 import de.upb.crc901.configurationsetting.serialization.SequentialCompositionSerializer;
@@ -100,14 +101,35 @@ public class HttpServiceServer {
 				/* determine method to be executed */
 				String address = t.getRequestURI().getPath().substring(1);
 				logger.info("Received query for {}", address);
-				String[] parts = address.split("/");
-				String clazz = parts[0];
-				String objectId = parts[1];
 
 				/* initiate state with the non-constant inputs given in post (non-int and non-doubles are treated as strings) */
 				HttpBody body = HttpBody.decode(t, otms);
+				
+				String[] parts = address.split("/", 3);
+				String clazz = parts[0];
+				String objectId = null;
+				if(parts.length > 1) { // address contains objectId. this request will therefore be handled as a service call.
+					objectId = parts[1];
+				}
+				else if(clazz.equals("choreography")) { // choreography call:
+					if(!body.containsCoreography()) {
+						response += "objectID and no choreography was given.";
+						throw new RuntimeException(response);
+					}
+					address = body.getOperation(body.getCurrentIndex()).getOperation().getName();
+					parts = address.split("/", 3);
+					clazz = parts[0];
+					if(parts.length > 1) { // address contains objectId. this request will therefore be handled as a service call.
+						objectId = parts[1];
+					}
+					
+				}
+				if (objectId == null) { 
+					response += "The address: " + address + " can't be handled by this server."; 
+					throw new RuntimeException(response);
+				}
+
 				Map<String, Object> initialState = body.getInputs();
-				//Map<String, Object> post = body.params;
 				Map<String, Object> state = new HashMap<>(initialState);
 				logger.info("Input keys are: {}", initialState.keySet());
 
@@ -119,9 +141,7 @@ public class HttpServiceServer {
 				SequentialComposition subsequenceComp = new SequentialComposition(new CompositionDomain());
 				OperationInvocation invocationToMakeFromHere = null;
 				if (body.containsCoreography()) {
-					SequentialCompositionSerializer srs = new SequentialCompositionSerializer();
-
-					comp = srs.readComposition(body.getCoreographyString());
+					comp = body.getComposition();
 					int currentIndex = body.getCurrentIndex();
 					Iterator<OperationInvocation> it = comp.iterator();
 					for (int i = 0; i < currentIndex; i++) {
@@ -139,7 +159,7 @@ public class HttpServiceServer {
 
 							/* if this is a constructor, also add the created instance to the locally available services */
 							servicesInExecEnvironment.add(opName);
-							if (objectId.equals("__construct")) {
+							if (opName.contains("__construct")) {
 								servicesInExecEnvironment.add(opInv.getOutputMapping().values().iterator().next().getName());
 							}
 						} else if (!servicesInExecEnvironment.contains(opName.substring(0, opName.indexOf("::")))) {
@@ -400,6 +420,8 @@ public class HttpServiceServer {
 		}
 		return null;
 	}
+	
+	
 
 	private boolean matchParameters(Class<?>[] requiredTypes, String[] providedTypes) {
 		if (requiredTypes.length > providedTypes.length)
@@ -471,7 +493,7 @@ public class HttpServiceServer {
 		server.start();
 		logger.info("Server is up ...");
 	}
-
+	
 	public void shutdown() {
 		server.stop(0);
 	}

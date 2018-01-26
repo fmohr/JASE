@@ -28,6 +28,7 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -96,8 +97,8 @@ public class ExampleTester {
 		List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .9f);
 
 		/* create and train classifier service */
-		Classifier c = new RandomTree();
-		String serviceId = client.callServiceOperation("127.0.0.1:" + PORT + "/" + c.getClass().getName() + "::__construct").get("out").asText();
+		String className = RandomTree.class.getName();
+		String serviceId = client.callServiceOperation("127.0.0.1:" + PORT + "/" + className + "::__construct").get("out").asText();
 		client.callServiceOperation(serviceId + "::buildClassifier", split.get(0));
 
 		/* eval instances on service */
@@ -122,63 +123,14 @@ public class ExampleTester {
 		System.out.println(sqs.serializeComposition(composition));
 		File imageFile = new File("testrsc/FelixMohr.jpg");
 		FastBitmap fb = new FastBitmap(imageFile.getAbsolutePath());
-//		JOptionPane.showMessageDialog(null, fb.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
+		JOptionPane.showMessageDialog(null, fb.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
 		ServiceCompositionResult resource = client.invokeServiceComposition(composition, fb);
 		FastBitmap result = otms.jsonToObject(resource.get("fb3"), FastBitmap.class);
-//		JOptionPane.showMessageDialog(null, result.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
-	}
-	
-	@Test
-	/**
-	 * Tests compatibility with pase server. Note have run compserver.sh from Pase before running these tests.
-	 * @throws Exception
-	 */
-	public void testPaseComposition1() throws Exception {
-		//client.callServiceOperation("localhost:5000/blubb::__construct", 1, 2 ,3);
-		List<String> composition_list = FileUtil.readFileAsList("testrsc/pase_composition1.txt");
-        SequentialComposition pase_composition = sqs.readComposition(composition_list);
-
-        // Parse inputs from 'testrsc/pase_composition1_data.json' to Instances and Instance
-        // Until the marshalling system is implemented the client has to parse the data.
-        byte[] encoded = Files.readAllBytes(Paths.get("testrsc/pase_composition1_data.json"));
-        String data_string = new String(encoded, Charset.defaultCharset());
-        encoded = null; 
-        JsonNode data_dict = new ObjectMapper().readTree(data_string);
-        JsonNode training_set = data_dict.get("training_set");
-        JsonNode prediction_set = data_dict.get("prediction_set");
-        jaicore.ml.interfaces.LabeledInstances training_data = new SimpleLabeledInstancesImpl(training_set);
-        jaicore.ml.interfaces.Instances prediction_data = new SimpleInstancesImpl(prediction_set);
-        Map<String, Object> additionalInputs = new HashMap<>();
-        additionalInputs.put("training_data", training_data);
-        additionalInputs.put("prediction_data", prediction_data);
-        
-        ServiceCompositionResult resource = client.invokeServiceComposition(pase_composition, additionalInputs);
-        
-        // check if predicitons are correct:
-        String[] exptectedPredictions = {"C", "C", "D", "D", "D", "B", "A", "C", "C", "C", "C", "D", "D", "A", "A", "C", "D", "D", "C", "D"}; // manually wrote this array down.
-		// extract perdiciton array:
-		List<Double> predictions = new ObjectMapper().readValue(resource.get("prediction").traverse(), new TypeReference<ArrayList<String>>(){});
-		// compare one by one
-		for(int i = 0; i < exptectedPredictions.length; i++){
-			Assert.assertEquals(exptectedPredictions[i], predictions.get(i));
-		}
-	}
-	
-	@Test
-	/**
-	 * Tests compatibility with pase server. Note have run compserver.sh from Pase before running these tests.
-	 * @throws Exception
-	 */
-	public void testPaseComposition2() throws Exception {
-		List<String> composition_list = FileUtil.readFileAsList("testrsc/pase_composition2.txt");
-        SequentialComposition pase_composition = sqs.readComposition(composition_list);
-        ServiceCompositionResult resource = client.invokeServiceComposition(pase_composition);
-        Assert.assertEquals(5, resource.get("f2").intValue());
-        Assert.assertEquals(5, resource.get("f5").intValue());
+		JOptionPane.showMessageDialog(null, result.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
 	}
 	
 	@After
-	public void suhtdown() {
+	public void shutdown() {
 		System.out.println("Shutting down ...");
 		server.shutdown();
 	}
