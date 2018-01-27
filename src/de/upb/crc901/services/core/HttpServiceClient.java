@@ -95,7 +95,7 @@ public class HttpServiceClient {
 			serializedCoreography = new SequentialCompositionSerializer().serializeComposition(coreography);
 		}
 		// create body, encode it and write it to the outputstream.
-		HttpBody body = new HttpBody(additionalInputs, serializedCoreography, index);
+		HttpBody body = new HttpBody(additionalInputs, serializedCoreography, index, -1);
 		String encoding = body.encode(otms);
 
 		/* setup connection */

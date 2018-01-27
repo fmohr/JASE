@@ -69,7 +69,7 @@ import weka.core.Instance;
 
 public class HttpServiceServer {
 
-	private static final Logger logger = LoggerFactory.getLogger(HttpServiceServer.class);
+	public static final Logger logger = LoggerFactory.getLogger(HttpServiceServer.class);
 
 	private static File folder = new File("http");
 
@@ -142,14 +142,16 @@ public class HttpServiceServer {
 				OperationInvocation invocationToMakeFromHere = null;
 				if (body.containsCoreography()) {
 					comp = body.getComposition();
-					int currentIndex = body.getCurrentIndex();
 					Iterator<OperationInvocation> it = comp.iterator();
-					for (int i = 0; i < currentIndex; i++) {
-						it.next();
-					}
 					Collection<String> servicesInExecEnvironment = new HashSet<>();
-					while (it.hasNext()) {
+					for (int i = 0; it.hasNext(); i++) {
 						OperationInvocation opInv = it.next();
+						if(body.isBelowExecutionBound(i)) {
+							continue; // ignore indexes before the current one
+						}
+						if(body.isAboveExecutionBound(i)) {
+							break; // ignore operations above maxindex.
+						}
 						invocationToMakeFromHere = opInv;
 						String opName = opInv.getOperation().getName();
 						if (opName.contains("/")) {
@@ -241,7 +243,7 @@ public class HttpServiceServer {
 
 	private OperationInvocationResult invokeOperation(OperationInvocation operationInvocation, Map<String, Object> state) throws IllegalAccessException, IllegalArgumentException,
 			InvocationTargetException, NoSuchMethodException, SecurityException, ClassNotFoundException, InstantiationException {
-		logger.info("Performing invocation {} in state {}", operationInvocation, state);
+		logger.info("Performing invocation {} in state {}", operationInvocation, state.keySet());
 		List<VariableParam> inputs = operationInvocation.getOperation().getInputParameters();
 		String[] types = new String[inputs.size()];
 		Object[] values = new Object[inputs.size()];
@@ -334,7 +336,7 @@ public class HttpServiceServer {
 
 					/* rewrite values according to the choice */
 					Class<?>[] requiredTypes = method.getParameterTypes();
-					logger.info("Values that will be used: {}", Arrays.toString(values));
+					//logger.info("Values that will be used: {}", Arrays.toString(values));
 					for (int i = 0; i < requiredTypes.length; i++) {
 						if (!requiredTypes[i].isPrimitive() && !requiredTypes[i].getName().equals("String")) {
 							logger.debug("map {}-th input to {}", i, requiredTypes[i].getName());

@@ -19,6 +19,8 @@ import de.upb.crc901.configurationsetting.operation.OperationInvocation;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
 import de.upb.crc901.configurationsetting.serialization.SequentialCompositionSerializer;
 
+import static de.upb.crc901.services.core.HttpServiceServer.logger;
+
 /**
  * A data structure class, which encodes or decodes Post body data. 
  * This is used by HttpServiceClient, whose data is encoded to the post's body content, 
@@ -38,6 +40,7 @@ public final class HttpBody {
 	 */
 	public final static String 	coreography = "coreography",
 								currentindex = "currentindex",
+								maxindex = "maxindex",
 								inputs = "inputs";
 	
 	/**
@@ -48,19 +51,13 @@ public final class HttpBody {
 	public final Map<String, Object> inputsField;
 	private final String coreographyField;
 	private final int currentIndexField;
-	private final SequentialComposition parsedCompositionField; 
+	private final int maxIndexField;
 	
-	HttpBody(Map<String, Object> inputs, String corepgraphy, int currentIndex) {
+	HttpBody(Map<String, Object> inputs, String corepgraphy, int currentIndex, int maxindex) {
 		this.inputsField = inputs;
 		this.coreographyField = corepgraphy;
 		this.currentIndexField = currentIndex;
-		if(containsCoreography()) {
-			SequentialCompositionSerializer scs = new SequentialCompositionSerializer();
-			this.parsedCompositionField = scs.readComposition(getCoreographyString());
-		}
-		else {
-			this.parsedCompositionField = null;
-		}
+		this.maxIndexField = maxindex;
 	}
 	
 	/**
@@ -90,7 +87,8 @@ public final class HttpBody {
 	 */
 	public SequentialComposition getComposition() {
 		if(containsCoreography()) {
-			return parsedCompositionField;
+			SequentialCompositionSerializer scs = new SequentialCompositionSerializer();
+			return scs.readComposition(getCoreographyString());
 		}
 		else {
 			throw new RuntimeException("No choreography was given.");
@@ -122,6 +120,26 @@ public final class HttpBody {
 	 */
 	public int getCurrentIndex() {
 		return currentIndexField;
+	}
+	
+	/**
+	 * Returns true if the index is below currentindexField.
+	 */
+	public boolean isBelowExecutionBound(int index) {
+		return index < currentIndexField;
+	}
+	
+	/**
+	 * Returns true if index is above or equal to maxindexField. 
+	 * If maxindexField is set to -1, it will be treated as infinity.
+	 */
+	public boolean isAboveExecutionBound(int index) {
+		if(maxIndexField == -1) {
+			return false; // always in bound if maxIndex is infinity.
+		}
+		else {
+			return index >= maxIndexField;
+		}
 	}
 	
 	/**
@@ -158,11 +176,15 @@ public final class HttpBody {
 		if(this.coreographyField != null) { 
 			encoding.append(HttpBody.coreography + "=");
 			encoding.append(this.coreographyField);
-			// append current string
+			// append current index
 			encoding.append("&" + HttpBody.currentindex + "=");
 			encoding.append(this.currentIndexField);
+			// append max index if it isn't -1:
+			if(maxIndexField != -1) {
+				encoding.append("&" + HttpBody.maxindex + "=");
+				encoding.append(this.maxIndexField);
+			}
 		}
-		
 		return encoding.toString();
 	}
 	
@@ -189,15 +211,24 @@ public final class HttpBody {
 		}
 		// get current index
 		int index = 0;
+		int maxindex = -1;
 		if(params.containsKey(HttpBody.currentindex)) {
 			String indexString = params.get(HttpBody.currentindex).toString();
 			try {
 				index = Integer.parseInt(indexString);
 			} catch(NumberFormatException nfe) {
-				nfe.printStackTrace();
+				logger.error(nfe.getMessage());
 			}
 		}
-		return new HttpBody(inputs, coreo, index);
+		if(params.containsKey(HttpBody.maxindex)) {
+			String indexString = params.get(HttpBody.maxindex).toString();
+			try {
+				maxindex = Integer.parseInt(indexString);
+			} catch(NumberFormatException nfe) {
+				logger.error(nfe.getMessage());
+			}
+		}
+		return new HttpBody(inputs, coreo, index, maxindex);
 	}
 	/**
 	 * Reads Post's Body from HttpExchange's input stream. 
@@ -290,12 +321,22 @@ public final class HttpBody {
 			String inputStringValue = params.get(inputName).toString();
 			JsonNode inputObject = new ObjectMapper().readTree(inputStringValue);
 			// Input needs to have type field.
-			if (!inputObject.has("type"))
-				throw new IllegalArgumentException("Input " + index + " has no type attribute!");
-			// And the given type has to be recognized.
-			if (!otms.isKnownType(inputObject.get("type").asText()))
-				throw new IllegalArgumentException("Ontological type of of input " + index + " is not known to the system!");
-			inputs.put(index, inputObject);
+			if(inputObject.isNumber()) {
+				inputs.put(index, inputObject);
+			}
+			else if (!inputObject.has("type")) { // ignore this one
+				//throw new IllegalArgumentException("Input " + index + " has no type attribute!");
+				HttpServiceServer.logger.error("Input with index = " + index + " has no type attribute!");
+				if(HttpServiceServer.logger.isDebugEnabled()) {
+					HttpServiceServer.logger.debug("Input " + index + " is " + inputStringValue);
+				}
+			}
+			else {
+				// And the given type has to be recognized.
+				if (!otms.isKnownType(inputObject.get("type").asText()))
+					throw new IllegalArgumentException("Ontological type of of input " + index + " is not known to the system!");
+				inputs.put(index, inputObject);
+			}
 		}
 		return inputs;
 	}

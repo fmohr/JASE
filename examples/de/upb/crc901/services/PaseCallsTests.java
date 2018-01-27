@@ -80,13 +80,7 @@ public class PaseCallsTests {
 	 * Tests compatibility with pase server. Note have run compserver.sh from Pase before running these tests.
 	 * @throws Exception
 	 */
-	public void testPaseCompositionRandomTree() throws Exception {
-		Instances wekaInstances = new Instances(
-				new BufferedReader(new FileReader("../CrcTaskBasedConfigurator/testrsc" + File.separator + "polychotomous" + File.separator + "audiology.arff")));
-		wekaInstances.setClassIndex(wekaInstances.numAttributes() - 1);
-		
-		client.callServiceOperation("localhost:5000/blubb::__construct", WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .05f).get(0), 1, 2 ,3);
-		
+	public void testPaseComposition_DecisionTree() throws Exception {
 		List<String> composition_list = FileUtil.readFileAsList("testrsc/pase_composition1.txt");
 		SequentialCompositionSerializer sqs = new SequentialCompositionSerializer();
         SequentialComposition pase_composition = sqs.readComposition(composition_list);
@@ -110,11 +104,11 @@ public class PaseCallsTests {
         // check if predicitons are correct:
         // manualy extracted data from composition.
         List<String> expectedLabels = Arrays.asList("A", "B", "C", "D");
-        int expectedPredictionCount = 10;
+        int expectedPredictionCount = 20;
         
 		// extract perdiciton array:
 		List<Double> predictions = new ObjectMapper().readValue(resource.get("prediction").traverse(), new TypeReference<ArrayList<String>>(){});
-		System.out.println(predictions.size());
+		Assert.assertEquals(expectedPredictionCount, predictions.size());
 		// see if the predicted label is contained in the list  of available one.
 		for(int i = 0; i < predictions.size(); i++){
 

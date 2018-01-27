@@ -123,10 +123,16 @@ public class ExampleTester {
 		System.out.println(sqs.serializeComposition(composition));
 		File imageFile = new File("testrsc/FelixMohr.jpg");
 		FastBitmap fb = new FastBitmap(imageFile.getAbsolutePath());
-		JOptionPane.showMessageDialog(null, fb.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
+		//JOptionPane.showMessageDialog(null, fb.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
 		ServiceCompositionResult resource = client.invokeServiceComposition(composition, fb);
 		FastBitmap result = otms.jsonToObject(resource.get("fb3"), FastBitmap.class);
-		JOptionPane.showMessageDialog(null, result.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
+		//JOptionPane.showMessageDialog(null, result.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
+	}
+	
+	@Test
+	public void testSequentialCompositionSerializer() throws Exception{
+		SequentialCompositionSerializer scs = new SequentialCompositionSerializer();
+		SequentialComposition sc = scs.readComposition("a = foo::bar({})");
 	}
 	
 	@After
