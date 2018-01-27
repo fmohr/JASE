@@ -72,8 +72,14 @@ public class HttpServiceClient {
 
 		/* separate service and operation from name */
 		String opFQName = call.getOperation().getName();
-		String service = opFQName.substring(0, opFQName.indexOf("::"));
-		String opName = opFQName.substring(service.length() + 2);
+		
+		// split the opFQName into service (classpath or objectname) and operation name (function name).
+		String[] hostservice_OpTupel = opFQName.split("::", 2);
+		String[] host_serviceTupel = hostservice_OpTupel[0].split("/",2);
+		String host = host_serviceTupel[0]; // hostname e.g.: 'localhost:5000'
+		String service = host_serviceTupel[1]; // service name e.g.: 'packagePath.Constructor'
+		// If no '::' is given, assume its a '__construct' call.
+		String opName = hostservice_OpTupel.length>1 ? hostservice_OpTupel[1] : "__construct";
 
 		/* prepare data */
 		// TODO coreography should have a indexof method
@@ -89,11 +95,15 @@ public class HttpServiceClient {
 			serializedCoreography = new SequentialCompositionSerializer().serializeComposition(coreography);
 		}
 		// create body, encode it and write it to the outputstream.
-		HttpBody body = new HttpBody(additionalInputs, serializedCoreography, index);
+		HttpBody body = new HttpBody(additionalInputs, serializedCoreography, index, -1);
 		String encoding = body.encode(otms);
 
 		/* setup connection */
-		URL url = new URL("http://" + service + "/" + opName);
+		URL url = new URL("http://" + host + "/" + service + "/" + opName);
+		if(serializedCoreography != null) {
+			// If it's a choreography, use choreography specific url
+			url = new URL("http://" + host + "/" + "choreography");
+		}
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
 		con.setRequestMethod("POST");
 		con.setDoOutput(true);
@@ -105,15 +115,32 @@ public class HttpServiceClient {
 		wr.close();
 
 		/* read and return answer */
-		InputStream in = con.getInputStream();
-		BufferedReader br = new BufferedReader(new InputStreamReader(in));
-		String curline;
 		StringBuilder content = new StringBuilder();
-		while ((curline = br.readLine()) != null) {
-			content.append(curline + '\n');
+		try (InputStream in = con.getInputStream()){
+		
+			BufferedReader br = new BufferedReader(new InputStreamReader(in));
+			String curline;
+			while ((curline = br.readLine()) != null) {
+				content.append(curline + '\n');
+			}
+			br.close();
+			con.disconnect();
+		} catch(IOException serverError) {
+			try (InputStream in = con.getErrorStream()){
+				
+				BufferedReader br = new BufferedReader(new InputStreamReader(in));
+				String curline;
+				while ((curline = br.readLine()) != null) {
+					content.append(curline + '\n');
+				}
+				br.close();
+				con.disconnect();
+				System.out.println("");
+			} catch(IOException anotherError) {
+				anotherError.printStackTrace();
+			}
+			throw new RuntimeException("Server returned error code " + con.getResponseCode() + ". Message: \n" + content.toString());
 		}
-		br.close();
-		con.disconnect();
 		
 		JsonNode root = new ObjectMapper().readTree(content.toString());
 		ServiceCompositionResult result = new ServiceCompositionResult();

@@ -15,6 +15,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 
+import de.upb.crc901.configurationsetting.operation.OperationInvocation;
+import de.upb.crc901.configurationsetting.operation.SequentialComposition;
+import de.upb.crc901.configurationsetting.serialization.SequentialCompositionSerializer;
+
+import static de.upb.crc901.services.core.HttpServiceServer.logger;
+
 /**
  * A data structure class, which encodes or decodes Post body data. 
  * This is used by HttpServiceClient, whose data is encoded to the post's body content, 
@@ -34,6 +40,7 @@ public final class HttpBody {
 	 */
 	public final static String 	coreography = "coreography",
 								currentindex = "currentindex",
+								maxindex = "maxindex",
 								inputs = "inputs";
 	
 	/**
@@ -44,11 +51,13 @@ public final class HttpBody {
 	public final Map<String, Object> inputsField;
 	private final String coreographyField;
 	private final int currentIndexField;
+	private final int maxIndexField;
 	
-	HttpBody(Map<String, Object> inputs, String corepgraphy, int currentIndex) {
+	HttpBody(Map<String, Object> inputs, String corepgraphy, int currentIndex, int maxindex) {
 		this.inputsField = inputs;
 		this.coreographyField = corepgraphy;
 		this.currentIndexField = currentIndex;
+		this.maxIndexField = maxindex;
 	}
 	
 	/**
@@ -59,7 +68,7 @@ public final class HttpBody {
 		return coreographyField != null;
 	}
 	/**
-	 * Returns the coreography value from the params map. "" if there is no entry.
+	 * Returns the coreography value from the params map. Throws RuntimeException if there is no entry.
 	 * @return coreography string.
 	 */
 	public String getCoreographyString() {
@@ -67,15 +76,70 @@ public final class HttpBody {
 			return coreographyField;
 		}
 		else {
-			return "";
+			throw new RuntimeException("No choreography was given.");
 		}
 	}
+	
+	
+	/**
+	 * If there was no choreography string in the request body this method throws an excpetion.
+	 * @return the parsed choreography string in a SequentialComposition. 
+	 */
+	public SequentialComposition getComposition() {
+		if(containsCoreography()) {
+			SequentialCompositionSerializer scs = new SequentialCompositionSerializer();
+			return scs.readComposition(getCoreographyString());
+		}
+		else {
+			throw new RuntimeException("No choreography was given.");
+		}
+	}
+	
+	/**
+	 * Returns the operation in position index from parsedCompositionField.
+	 * @param index position of operation in composition.
+	 * @return the addressed operation
+	 */
+	public OperationInvocation getOperation(int index) {
+		for(OperationInvocation opInv : getComposition()) {
+			if(index != 0) {
+				// decrease index until it hits 0.
+				index--;
+			}
+			else {
+				// index hit 0, so this one is requested.
+				return opInv;
+			}
+		}
+		throw new ArrayIndexOutOfBoundsException("index " + index + " was asked from " + getCoreographyString());
+	}
+	
 	/**
 	 * Current Index. 
 	 * @return the current index value from the map if it is present and is Integer-parsable. Else 0 is returned.
 	 */
 	public int getCurrentIndex() {
 		return currentIndexField;
+	}
+	
+	/**
+	 * Returns true if the index is below currentindexField.
+	 */
+	public boolean isBelowExecutionBound(int index) {
+		return index < currentIndexField;
+	}
+	
+	/**
+	 * Returns true if index is above or equal to maxindexField. 
+	 * If maxindexField is set to -1, it will be treated as infinity.
+	 */
+	public boolean isAboveExecutionBound(int index) {
+		if(maxIndexField == -1) {
+			return false; // always in bound if maxIndex is infinity.
+		}
+		else {
+			return index >= maxIndexField;
+		}
 	}
 	
 	/**
@@ -108,13 +172,19 @@ public final class HttpBody {
 			encoding.append("&");
 		}
 		
-		// append coreography
-		encoding.append(HttpBody.coreography + "=");
-		encoding.append(this.coreographyField);
-		// append current string
-		encoding.append("&" + HttpBody.currentindex + "=");
-		encoding.append(this.currentIndexField);
-		
+		// append coreography if not null
+		if(this.coreographyField != null) { 
+			encoding.append(HttpBody.coreography + "=");
+			encoding.append(this.coreographyField);
+			// append current index
+			encoding.append("&" + HttpBody.currentindex + "=");
+			encoding.append(this.currentIndexField);
+			// append max index if it isn't -1:
+			if(maxIndexField != -1) {
+				encoding.append("&" + HttpBody.maxindex + "=");
+				encoding.append(this.maxIndexField);
+			}
+		}
 		return encoding.toString();
 	}
 	
@@ -130,18 +200,35 @@ public final class HttpBody {
 		String decodedBody = readBody(exchange);
 		Map<String, Object> params = parseBodyIntoMap(decodedBody);
 		Map<String, Object> inputs = jsonDeserialiseInputs(params, otms);
-		String coreo = params.get(HttpBody.coreography).toString();
+		
+		String coreo; 
+		// assign coreography string, based on if it is available.
+		if(params.containsKey(HttpBody.coreography)) {
+			coreo = params.get(HttpBody.coreography).toString();
+		}
+		else {
+			coreo = null;
+		}
 		// get current index
 		int index = 0;
+		int maxindex = -1;
 		if(params.containsKey(HttpBody.currentindex)) {
 			String indexString = params.get(HttpBody.currentindex).toString();
 			try {
 				index = Integer.parseInt(indexString);
 			} catch(NumberFormatException nfe) {
-				nfe.printStackTrace();
+				logger.error(nfe.getMessage());
 			}
 		}
-		return new HttpBody(inputs, coreo, index);
+		if(params.containsKey(HttpBody.maxindex)) {
+			String indexString = params.get(HttpBody.maxindex).toString();
+			try {
+				maxindex = Integer.parseInt(indexString);
+			} catch(NumberFormatException nfe) {
+				logger.error(nfe.getMessage());
+			}
+		}
+		return new HttpBody(inputs, coreo, index, maxindex);
 	}
 	/**
 	 * Reads Post's Body from HttpExchange's input stream. 
@@ -234,15 +321,26 @@ public final class HttpBody {
 			String inputStringValue = params.get(inputName).toString();
 			JsonNode inputObject = new ObjectMapper().readTree(inputStringValue);
 			// Input needs to have type field.
-			if (!inputObject.has("type"))
-				throw new IllegalArgumentException("Input " + index + " has no type attribute!");
-			// And the given type has to be recognized.
-			if (!otms.isKnownType(inputObject.get("type").asText()))
-				throw new IllegalArgumentException("Ontological type of of input " + index + " is not known to the system!");
-			inputs.put(index, inputObject);
+			if(inputObject.isNumber()) {
+				inputs.put(index, inputObject);
+			}
+			else if (!inputObject.has("type")) { // ignore this one
+				//throw new IllegalArgumentException("Input " + index + " has no type attribute!");
+				HttpServiceServer.logger.error("Input with index = " + index + " has no type attribute!");
+				if(HttpServiceServer.logger.isDebugEnabled()) {
+					HttpServiceServer.logger.debug("Input " + index + " is " + inputStringValue);
+				}
+			}
+			else {
+				// And the given type has to be recognized.
+				if (!otms.isKnownType(inputObject.get("type").asText()))
+					throw new IllegalArgumentException("Ontological type of of input " + index + " is not known to the system!");
+				inputs.put(index, inputObject);
+			}
 		}
 		return inputs;
 	}
+
 	
 	
 }
