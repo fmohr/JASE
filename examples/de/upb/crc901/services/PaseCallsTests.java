@@ -68,7 +68,7 @@ public class PaseCallsTests {
 
 
 	private HttpServiceClient client;
-	private final OntologicalTypeMarshallingSystem otms = new OntologicalTypeMarshallingSystem("testrsc/conf/types.conf");
+	private final OntologicalTypeMarshallingSystem otms = new OntologicalTypeMarshallingSystem();
 
 	@Before
 	public void init() throws Exception {
