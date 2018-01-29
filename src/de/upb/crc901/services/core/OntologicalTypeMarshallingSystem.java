@@ -21,13 +21,8 @@
  */
 package de.upb.crc901.services.core;
 
-import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.reflect.MethodUtils;
 import org.slf4j.Logger;
@@ -37,48 +32,44 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import jaicore.basic.FileUtil;
-
 public class OntologicalTypeMarshallingSystem {
 
 	private final Logger logger = LoggerFactory.getLogger(OntologicalTypeMarshallingSystem.class);
-	private final Map<Class<?>, String> ontologyMap = new HashMap<>();
+	// private final Map<Class<?>, String> ontologyMap = new HashMap<>();
 
-	public OntologicalTypeMarshallingSystem(String confFile) {
+	// public OntologicalTypeMarshallingSystem(String confFile) {
 
-		/* read config files */
-		try {
-			for (String typemapping : FileUtil.readFileAsList(confFile)) {
-				if (typemapping.trim().startsWith("#") || typemapping.trim().isEmpty())
-					continue;
-				String[] split = typemapping.split("\t");
-				try {
-					ontologyMap.put(Class.forName(split[0].trim()), split[split.length - 1].trim());
-				} catch (ClassNotFoundException e) {
-					logger.error("Cannot bind class {} to {} as the class {} could not be found.", split[0].trim(), split[1].trim(), split[0].trim());
-				}
-			}
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-
-		logger.info("Loaded OTMS: {}", ontologyMap);
-	}
+	// /* read config files */
+	// try {
+	// for (String typemapping : FileUtil.readFileAsList(confFile)) {
+	// if (typemapping.trim().startsWith("#") || typemapping.trim().isEmpty())
+	// continue;
+	// String[] split = typemapping.split("\t");
+	// try {
+	// ontologyMap.put(Class.forName(split[0].trim()), split[split.length - 1].trim());
+	// } catch (ClassNotFoundException e) {
+	// logger.error("Cannot bind class {} to {} as the class {} could not be found.", split[0].trim(), split[1].trim(), split[0].trim());
+	// }
+	// }
+	// } catch (IOException e) {
+	// e.printStackTrace();
+	// }
+	//
+	// logger.info("Loaded OTMS: {}", ontologyMap);
+	// }
 
 	public JsonNode objectToJson(Object o) {
 		try {
 			if (o == null)
 				throw new IllegalArgumentException("Cannot serialize null-objects.");
-			if (!ontologyMap.containsKey(o.getClass()))
-				throw new IllegalArgumentException("Cannot serialize objects of type " + o.getClass().getName() + " as no ontological concept was defined for them.");
 			String serializerClassName = "de.upb.crc901.services.typeserializers." + o.getClass().getSimpleName() + "OntologySerializer";
 			Method method = MethodUtils.getMatchingAccessibleMethod(Class.forName(serializerClassName), "serialize", o.getClass());
 			assert method != null : "Could not find method \"serialize(" + o.getClass() + ")\" in serializer class " + serializerClassName;
-			IOntologySerializer<?> serializer = (IOntologySerializer<?>)Class.forName(serializerClassName).getConstructor().newInstance();
-			JsonNode dataNode = (JsonNode) method.invoke(serializer, o);
+			IOntologySerializer<?> serializer = (IOntologySerializer<?>) Class.forName(serializerClassName).getConstructor().newInstance();
+			JASEDataObject serialization = (JASEDataObject) method.invoke(serializer, o);
 			ObjectNode root = new ObjectMapper().createObjectNode();
-			root.put("type", ontologyMap.get(o.getClass()));
-			root.set("data", dataNode);
+			root.put("type", serialization.getType());
+			root.set("data", serialization.getObject());
 			return root;
 		} catch (ClassNotFoundException e) {
 			throw new UnsupportedOperationException("Cannot convert objects of type " + o.getClass().getName()
@@ -102,17 +93,16 @@ public class OntologicalTypeMarshallingSystem {
 		/* determine serializer */
 		try {
 			Class<?> serializerClass = Class.forName("de.upb.crc901.services.typeserializers." + clazz.getSimpleName() + "OntologySerializer");
-			Method method = MethodUtils.getAccessibleMethod(serializerClass, "unserialize",
-					JsonNode.class);
+			Method method = MethodUtils.getAccessibleMethod(serializerClass, "unserialize", JsonNode.class);
 			if (method == null)
 				throw new UnsupportedOperationException("Cannot convert objects of type " + type + " to a Java object of class " + clazz.getName()
 						+ ". The serializer class \"de.upb.crc901.services.typeserializers." + clazz.getSimpleName()
 						+ "OntologySerializer\" has no method \"unserialize(JsonNode)\".");
-			
+
 			Object rawSerializer = serializerClass.getConstructor().newInstance();
 			if (!(IOntologySerializer.class.isInstance(rawSerializer)))
 				throw new ClassCastException("The ontological serializer for " + clazz.getSimpleName() + " does not implement the IOntologySerializer interface!");
-			
+
 			/* unserialize the JSON string to an actual Java object */
 			return (T) method.invoke(rawSerializer, json.get("data"));
 		} catch (ClassNotFoundException e) {
@@ -129,15 +119,36 @@ public class OntologicalTypeMarshallingSystem {
 		}
 	}
 
-	public Collection<Class<?>> getClassesMappedToType(String type) {
-		return ontologyMap.keySet().stream().filter(k -> ontologyMap.get(k).equals(type)).collect(Collectors.toList());
-	}
+	public boolean isLinkImplemented(String semanticType, Class<?> clazz) {
+		try {
 
-	public boolean hasMappingForClass(Class<?> clazz) {
-		return ontologyMap.containsKey(clazz);
-	}
+			/* check whether serializer exists and wheter it implements the IOntologySerializer interface */
+			Class<?> serializerClass = Class.forName("de.upb.crc901.services.typeserializers." + clazz.getSimpleName() + "OntologySerializer");
+			Object serializer = serializerClass.newInstance();
+			if (!(serializer instanceof IOntologySerializer<?>))
+				return false;
+			
+			/* if the serializer does not support the semantic type, return false */
+			if (!((IOntologySerializer<?>)serializer).getSupportedSemanticTypes().contains(semanticType))
+				return false;
+			
+			return true;
+			
+		} catch (Exception e) {
+			return false;
+		}
 
-	public boolean isKnownType(String type) {
-		return ontologyMap.values().contains(type);
 	}
+	//
+	// public Collection<Class<?>> getClassesMappedToType(String type) {
+	// return ontologyMap.keySet().stream().filter(k -> ontologyMap.get(k).equals(type)).collect(Collectors.toList());
+	// }
+	//
+	// public boolean hasMappingForClass(Class<?> clazz) {
+	// return ontologyMap.containsKey(clazz);
+	// }
+	//
+	// public boolean isKnownType(String type) {
+	// return ontologyMap.values().contains(type);
+	// }
 }

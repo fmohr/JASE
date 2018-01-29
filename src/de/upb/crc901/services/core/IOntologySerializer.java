@@ -21,9 +21,10 @@
  */
 package de.upb.crc901.services.core;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import java.util.Collection;
 
 public interface IOntologySerializer<T> {
-	public T unserialize(final JsonNode json);
-	public JsonNode serialize(final T object);
+	public T unserialize(final JASEDataObject json);
+	public JASEDataObject serialize(final T object);
+	public Collection<String> getSupportedSemanticTypes();
 }

@@ -433,7 +433,7 @@ public class HttpServiceServer {
 				if (!requiredTypes[i].getName().equals(providedTypes[i]))
 					return false;
 			} else {
-				if (!otms.hasMappingForClass(requiredTypes[i]))
+				if (!otms.isLinkImplemented(providedTypes[i], requiredTypes[i]))
 					return false;
 				logger.debug("Type: ", requiredTypes[i]);
 			}
@@ -459,10 +459,10 @@ public class HttpServiceServer {
 	}
 
 	public HttpServiceServer(int port) throws IOException {
-		this(port, "conf/operations.conf", "conf/types.conf");
+		this(port, "conf/operations.conf");
 	}
 
-	public HttpServiceServer(int port, String FILE_CONF_OPS, String FILE_CONF_TYPES) throws IOException {
+	public HttpServiceServer(int port, String FILE_CONF_OPS) throws IOException {
 		for (String op : FileUtil.readFileAsList(FILE_CONF_OPS)) {
 			if (op.trim().startsWith("#") || op.trim().isEmpty())
 				continue;
@@ -488,7 +488,7 @@ public class HttpServiceServer {
 				}
 			}
 		}
-		otms = new OntologicalTypeMarshallingSystem(FILE_CONF_TYPES);
+		otms = new OntologicalTypeMarshallingSystem();
 		clientForSubSequentCalls = new HttpServiceClient(otms);
 		server = HttpServer.create(new InetSocketAddress(port), 0);
 		server.createContext("/", new JavaClassHandler());

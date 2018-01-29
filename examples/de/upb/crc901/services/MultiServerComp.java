@@ -25,13 +25,13 @@ public class MultiServerComp {
 	private SequentialComposition composition;
 	private SequentialCompositionSerializer sqs;
 	private HttpServiceClient client;
-	private final OntologicalTypeMarshallingSystem otms = new OntologicalTypeMarshallingSystem("testrsc/conf/types.conf");
+	private final OntologicalTypeMarshallingSystem otms = new OntologicalTypeMarshallingSystem();
 
 	@Before
 	public void init() throws Exception {
 
 		/* start server */
-		server = new HttpServiceServer(JASEPORT, "testrsc/conf/operations.conf", "testrsc/conf/types.conf");
+		server = new HttpServiceServer(JASEPORT, "testrsc/conf/operations.conf");
 
 		/* read in composition */
 		sqs = new SequentialCompositionSerializer();

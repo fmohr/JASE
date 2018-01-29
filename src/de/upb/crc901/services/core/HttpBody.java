@@ -333,8 +333,6 @@ public final class HttpBody {
 			}
 			else {
 				// And the given type has to be recognized.
-				if (!otms.isKnownType(inputObject.get("type").asText()))
-					throw new IllegalArgumentException("Ontological type of of input " + index + " is not known to the system!");
 				inputs.put(index, inputObject);
 			}
 		}
