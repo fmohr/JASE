@@ -51,4 +51,10 @@ public class JASEDataObject {
 		return true;
 	}
 
+	public static final JASEDataObject FROM_JSON(JsonNode json) {
+		JsonNode object = json.get("data");
+		String type = json.get("type").asText();
+		return new JASEDataObject(type, object);
+	}
+
 }
