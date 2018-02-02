@@ -141,7 +141,6 @@ public class HttpServiceClient {
 			}
 			throw new RuntimeException("Server returned error code " + con.getResponseCode() + ". Message: \n" + content.toString());
 		}
-		
 		JsonNode root = new ObjectMapper().readTree(content.toString());
 		ServiceCompositionResult result = new ServiceCompositionResult();
 		Iterator<String> it = root.fieldNames();

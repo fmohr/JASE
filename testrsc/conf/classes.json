@@ -1,0 +1,5 @@
+{
+    "weka.classifiers.trees.RandomTree" : {
+        "wrapper" : "de.upb.crc901.services.wrappers.WekaClassifierWrapper"
+    }
+}

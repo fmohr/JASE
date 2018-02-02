@@ -75,10 +75,9 @@ public class OntologicalTypeMarshallingSystem {
 			throw new UnsupportedOperationException("Cannot convert objects of type " + o.getClass().getName()
 					+ " to JSON. The necessary serializer class \"de.upb.crc901.services.typeserializers." + o.getClass().getSimpleName() + "OntologySerializer\" was not found.");
 		} catch (IllegalAccessException | InvocationTargetException | IllegalArgumentException | InstantiationException | NoSuchMethodException e) {
-			e.printStackTrace();
 			throw new UnsupportedOperationException(
 					"Cannot convert objects of type " + o.getClass().getName() + " to JSON objects. The necessary serializer class \"de.upb.crc901.services.typeserializers."
-							+ o.getClass().getSimpleName() + "OntologySerializer\" throws an exception.");
+							+ o.getClass().getSimpleName() + "OntologySerializer\" throws an exception.",e);
 		}
 	}
 

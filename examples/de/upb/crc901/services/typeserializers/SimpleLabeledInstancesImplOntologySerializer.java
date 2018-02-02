@@ -14,7 +14,7 @@ import jaicore.ml.core.SimpleLabeledInstancesImpl;
 
 public class SimpleLabeledInstancesImplOntologySerializer implements IOntologySerializer<SimpleLabeledInstancesImpl>  {
 
-	private static final List<String> supportedTypes = Arrays.asList(new String[] {"Instances"});
+	private static final List<String> supportedTypes = Arrays.asList(new String[] {"LabeledInstances"});
 	
 	public SimpleLabeledInstancesImpl unserialize(final JASEDataObject json) {
 		SimpleLabeledInstancesImpl data = new SimpleLabeledInstancesImpl(json.getObject());
