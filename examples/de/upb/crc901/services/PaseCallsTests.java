@@ -106,7 +106,7 @@ public class PaseCallsTests {
         int expectedPredictionCount = 20;
         
 		// extract perdiciton array:
-		List<Double> predictions = new ObjectMapper().readValue(resource.get("prediction").traverse(), new TypeReference<ArrayList<String>>(){});
+		List<String> predictions = new ObjectMapper().readValue(resource.get("prediction").traverse(), new TypeReference<ArrayList<String>>(){});
 		Assert.assertEquals(expectedPredictionCount, predictions.size());
 		// see if the predicted label is contained in the list  of available one.
 		for(int i = 0; i < predictions.size(); i++){

@@ -9,6 +9,7 @@ import java.util.TreeSet;
 import org.apache.commons.collections4.map.HashedMap;
 
 import de.upb.crc901.services.core.ServiceWrapper;
+import jaicore.basic.MathExt;
 import jaicore.ml.WekaUtil;
 import jaicore.ml.core.SimpleInstancesImpl;
 import jaicore.ml.core.SimpleLabeledInstanceImpl;
@@ -95,7 +96,7 @@ public class WekaClassifierWrapper extends ServiceWrapper{
 	 * 
 	 * @param labeledInstances List of data mapped onto labels. This function only cares for the labels so the column size may be 0.
 	 */
-	public void declareClasses(SimpleLabeledInstancesImpl labeledInstances) {
+	public void declare_classes(SimpleLabeledInstancesImpl labeledInstances) {
 		/* extendedClasses indicates if the labeledInstances contains a label 
 		 * which wasn't specified in previous declareClasses invocations.
 		 * If true the wekaInstaces object will be extended so is the inner classifier.
@@ -146,7 +147,7 @@ public class WekaClassifierWrapper extends ServiceWrapper{
 		// does the data match in column size?
 		checkAttributes(trainingData.getNumberOfColumns());
 		// store the classes defined in the given data.
-		declareClasses(trainingData);
+		declare_classes(trainingData);
 		
 		// Now create a weka.core.Instances object and fill our data to it.
 		Instances trainingInstances = createWekaInstances(trainingData);
@@ -236,7 +237,9 @@ public class WekaClassifierWrapper extends ServiceWrapper{
 			index++;
 		}
 		if(normalize) {
-			return ((double)score) / ((double)labeledinstances.size());
+			double normalizedScore = ((double)score) / ((double)labeledinstances.size());
+			double roundedNormalizedScore =  MathExt.round(normalizedScore, 2);
+			return roundedNormalizedScore;
 		}
 		else {
 			return score;

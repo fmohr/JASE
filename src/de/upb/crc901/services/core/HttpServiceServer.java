@@ -158,10 +158,13 @@ public class HttpServiceServer {
 						invocationToMakeFromHere = opInv;
 						String opName = opInv.getOperation().getName();
 						if (opName.contains("/")) {
-							String host = opName.substring(0, opName.indexOf("/"));
-							if (!host.equals(t.getLocalAddress().toString().substring(1)))
+//							String host = opName.substring(0, opName.indexOf("/"));
+//							String myAddress = t.getLocalAddress().toString().substring(1);
+//							if (!host.equals(myAddress))
+//								break;
+							if(!canExecute(opInv)) { // if this server can't execute this operation exit the loop here. invocationToMakeFromHere will then contain the address of the next invocation.
 								break;
-
+							}
 							/* if this is a constructor, also add the created instance to the locally available services */
 							servicesInExecEnvironment.add(opName);
 							if (opName.contains("__construct")) {
@@ -241,6 +244,21 @@ public class HttpServiceServer {
 				os.close();
 			}
 
+		}
+
+		
+	}
+	
+	private boolean canExecute(OperationInvocation opInv) {
+		String opName = opInv.getOperation().getName();
+		
+		if(opName.contains("__construct")) {
+			// extract class name
+			String clazz = opName.substring(opName.indexOf("/") + 1).split("::")[0];
+			return classesConfig.classknown(clazz); // returns true if the class is known.
+		}
+		else { // lets hope we know how to execute this. TODO see if there are cases where we can't execute an op without '__construct'
+			return true;
 		}
 	}
 
@@ -423,6 +441,7 @@ public class HttpServiceServer {
 			
 			if (object instanceof ServiceHandle)
 				object = ((ServiceHandle) object).service;
+			
 			Method method = getMethod(object.getClass(), methodName, types);
 			if (method == null ) {
 				// method wasn't found. 

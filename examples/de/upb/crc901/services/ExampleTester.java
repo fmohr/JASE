@@ -127,8 +127,13 @@ public class ExampleTester {
 		
 		/* report score */
 		System.out.println(mistakes + "/" + split.get(1).size());
-		System.out.println("Accuracy: " + MathExt.round(1 - mistakes * 1f / split.get(1).size(), 2));
-		System.out.println("Accuracy by predict_and_score: " + MathExt.round(score, 2));
+		double clientside_score = MathExt.round(1 - mistakes * 1f / split.get(1).size(), 2);
+		score = MathExt.round(score, 2);
+		
+		System.out.println("Accuracy calculated by client: " + clientside_score);
+		System.out.println("Accuracy by predict_and_score method: " + score);
+		
+		Assert.assertEquals(clientside_score, score, 0.01);
 		
 	}
 

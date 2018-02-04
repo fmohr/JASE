@@ -1,5 +1,11 @@
 {
     "weka.classifiers.trees.RandomTree" : {
         "wrapper" : "de.upb.crc901.services.wrappers.WekaClassifierWrapper"
+    },
+    "weka.classifiers.trees.RandomForest" : {
+        "wrapper" : "de.upb.crc901.services.wrappers.WekaClassifierWrapper"
+    },
+    "weka.classifiers.functions.MultilayerPerceptron": {
+        "wrapper" : "de.upb.crc901.services.wrappers.WekaClassifierWrapper"
     }
 }

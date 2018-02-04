@@ -88,7 +88,11 @@ public final class HttpBody {
 	public SequentialComposition getComposition() {
 		if(containsCoreography()) {
 			SequentialCompositionSerializer scs = new SequentialCompositionSerializer();
-			return scs.readComposition(getCoreographyString());
+			// TODO workaround because bug in scs. remove the replacement after the bug is fixed:
+			String composition = getCoreographyString();
+			composition = composition.replaceAll("\\(\\{\\}\\)", "({,})"); // add comma to empty inputs
+			// end of workaround
+			return scs.readComposition(composition);
 		}
 		else {
 			throw new RuntimeException("No choreography was given.");
