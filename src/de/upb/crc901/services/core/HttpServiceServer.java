@@ -44,6 +44,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
@@ -64,6 +65,7 @@ import de.upb.crc901.configurationsetting.operation.Operation;
 import de.upb.crc901.configurationsetting.operation.OperationInvocation;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
 import de.upb.crc901.configurationsetting.serialization.SequentialCompositionSerializer;
+import de.upb.crc901.services.wrappers.WekaClassifierWrapper;
 import jaicore.basic.FileUtil;
 import weka.core.Instance;
 
@@ -76,14 +78,15 @@ public class HttpServiceServer {
 	private final HttpServer server;
 	private final HttpServiceClient clientForSubSequentCalls;
 	private final OntologicalTypeMarshallingSystem otms;
+	private final ClassesConfiguration classesConfig;
 	private final Set<String> supportedOperations = new HashSet<>();
 	private final Map<String, Map<String, String>> resultMaps = new HashMap<>();
 
 	class ServiceHandle {
-		long id;
+		String id;
 		Object service;
 
-		public ServiceHandle(long id, Object service) {
+		public ServiceHandle(String id, Object service) {
 			super();
 			this.id = id;
 			this.service = service;
@@ -155,10 +158,13 @@ public class HttpServiceServer {
 						invocationToMakeFromHere = opInv;
 						String opName = opInv.getOperation().getName();
 						if (opName.contains("/")) {
-							String host = opName.substring(0, opName.indexOf("/"));
-							if (!host.equals(t.getLocalAddress().toString().substring(1)))
+//							String host = opName.substring(0, opName.indexOf("/"));
+//							String myAddress = t.getLocalAddress().toString().substring(1);
+//							if (!host.equals(myAddress))
+//								break;
+							if(!canExecute(opInv)) { // if this server can't execute this operation exit the loop here. invocationToMakeFromHere will then contain the address of the next invocation.
 								break;
-
+							}
 							/* if this is a constructor, also add the created instance to the locally available services */
 							servicesInExecEnvironment.add(opName);
 							if (opName.contains("__construct")) {
@@ -239,9 +245,24 @@ public class HttpServiceServer {
 			}
 
 		}
+
+		
+	}
+	
+	private boolean canExecute(OperationInvocation opInv) {
+		String opName = opInv.getOperation().getName();
+		
+		if(opName.contains("__construct")) {
+			// extract class name
+			String clazz = opName.substring(opName.indexOf("/") + 1).split("::")[0];
+			return classesConfig.classknown(clazz); // returns true if the class is known.
+		}
+		else { // lets hope we know how to execute this. TODO see if there are cases where we can't execute an op without '__construct'
+			return true;
+		}
 	}
 
-	private OperationInvocationResult invokeOperation(OperationInvocation operationInvocation, Map<String, Object> state) throws IllegalAccessException, IllegalArgumentException,
+	private void invokeOperation(OperationInvocation operationInvocation, Map<String, Object> state) throws IllegalAccessException, IllegalArgumentException,
 			InvocationTargetException, NoSuchMethodException, SecurityException, ClassNotFoundException, InstantiationException {
 		logger.info("Performing invocation {} in state {}", operationInvocation, state.keySet());
 		List<VariableParam> inputs = operationInvocation.getOperation().getInputParameters();
@@ -261,7 +282,7 @@ public class HttpServiceServer {
 				}
 			} else if (val.startsWith("\"") && val.endsWith("\"")) {
 				types[j] = String.class.getName();
-				values[j] = val;
+				values[j] = val.substring(1, val.length()-1); // remove quotation marks
 			}
 
 			/* if the value is a variable in our current state, use this */
@@ -281,8 +302,9 @@ public class HttpServiceServer {
 					types[j] = var.get("type").asText();
 					values[j] = var;
 				}
-			} else
+			} else {
 				throw new IllegalArgumentException("Cannot find value for argument " + val + " in state table.");
+			}
 		}
 
 		/* if this operation is a constructor, create the corresponding service and return the url */
@@ -300,25 +322,55 @@ public class HttpServiceServer {
 			String methodName = parts[1];
 			if (methodName.equals("__construct")) {
 				logger.info("The invocation creates a new service instance");
+
 				Constructor<?> constructor = getConstructor(Class.forName(clazz), types);
 				if (logger.isDebugEnabled())
 					logger.debug("{}/{}/{}", types.length, constructor.getParameterCount(), constructor);
-				Object newService = constructor.newInstance(values);
-
-				/* serialize result */
-				long id = System.currentTimeMillis();
-				if (newService instanceof Serializable) {
+				
+				Object newService = null;
+				
+				boolean wrapped = classesConfig.isWrapped(clazz); // true if this class is supposed to be wrapped.
+				ServiceWrapper wrapper = null;
+				if(wrapped) { // create the wrapper.
+					String wrapperClasspath = classesConfig.getWrapperClasspath(clazz);
+					Class<?> wrapperClass = Class.forName(wrapperClasspath);
+					Constructor<? extends ServiceWrapper> wrapperConstructor = (Constructor<? extends ServiceWrapper>)
+							wrapperClass.getConstructor(ServiceWrapper.CONSTRUCTOR_TYPES);
+					// create the wrapper by giving it the constructor and the values.
+					wrapper = wrapperConstructor.newInstance(constructor, values);	
+					newService = wrapper.getDelegate();
+				}
+				else {
+					// create the service itself;
+					newService = constructor.newInstance(values);
+				}
+				// create service handle by identifying the service with an unique identifier.
+				String id = UUID.randomUUID().toString();
+				ServiceHandle sh;
+				if(!wrapped) {
+					sh  = new ServiceHandle(id, newService);
+				}
+				else {
+					sh = new ServiceHandle(id, wrapper);
+				}
+				state.put(outputMapping.values().iterator().next().getName(), sh);
+				
+				// if wrapped and wrappers'delegate can be serialized or it wasn't wrapped and the service itself can be serialized.
+				if (newService instanceof Serializable) {  
+					/* serialize result */
 					try {
-						FileUtil.serializeObject(newService, folder + File.separator + "objects" + File.separator + clazz + File.separator + id);
+						FileUtil.serializeObject(wrapped ? wrapper : newService, getServicePath(clazz, id));
 					} catch (IOException e) {
-						e.printStackTrace();
+						logger.error(e.getMessage() + "\n" + Arrays.toString(e.getStackTrace()));
+						/* set to null to indicate that this service wasn't serialized. */
+						sh.id = null; 
 					}
 				}
-				OperationInvocationResult result = new OperationInvocationResult();
-				ServiceHandle sh = new ServiceHandle(id, newService);
-				result.put("out", sh);
-				state.put(outputMapping.values().iterator().next().getName(), sh);
-				return result;
+				else {
+					/* set to null to indicate that this service wasn't serialized. */
+					sh.id = null; 
+				}
+				return;
 			}
 
 			/* otherwise execute the operation on the given service */
@@ -327,12 +379,28 @@ public class HttpServiceServer {
 				logger.info("Run invocation on an existing service instance");
 				clazz = parts[0].substring(0, parts[0].lastIndexOf("/"));
 				String objectId = parts[0].substring(clazz.length() + 1);
+				boolean wrapped = classesConfig.isWrapped(clazz);
+				boolean delegate = false; // if delegate equals true then the wrapper doesn't overwrite the method.
 				try {
-					Method method = getMethod(Class.forName(clazz), methodName, types);
-					if (method == null)
+					Method method = null;
+					if(wrapped) { 
+						// This clazz is wrapped.
+						String wrapperClazz = classesConfig.getWrapperClasspath(clazz);
+						// Find out if the method is 'overwritten' in the wrapper.
+						// If it isn't overwritten use the clazz itself to get the method.
+						method = getMethod(Class.forName(wrapperClazz), methodName, types);
+						delegate = false;
+					}
+					if(method == null) { // either this clazz isn't wrapped or the method wasn't overwritten.
+						delegate = true;
+						method =  getMethod(Class.forName(clazz), methodName, types);
+					}
+					if (method == null) { // The method is still not found.
 						throw new UnsupportedOperationException(
 								"Cannot invoke " + methodName + " for types " + Arrays.toString(types) + ". The method does not exist in class " + clazz + ".");
-					Object service = FileUtil.unserializeObject(folder + File.separator + "objects" + File.separator + clazz + File.separator + objectId);
+					}
+					
+					Object service = FileUtil.unserializeObject(getServicePath(clazz, objectId));
 
 					/* rewrite values according to the choice */
 					Class<?>[] requiredTypes = method.getParameterTypes();
@@ -347,11 +415,20 @@ public class HttpServiceServer {
 							values[i] = otms.jsonToObject((JsonNode) values[i], requiredTypes[i]);
 						}
 					}
-					logger.info("Computed inputs for invocation: {}: {}", (values[0] instanceof Instance) ? ((Instance) values[0]).classIndex() : values[0].getClass(),
-							Arrays.toString(values));
-					basicResult = method.invoke(service, values);
-					logger.info("Invocation ready. Result is: {}", basicResult);
-					FileUtil.serializeObject(service, folder + File.separator + "objects" + File.separator + clazz + File.separator + objectId);
+					// invoke method from service.
+					// service is the wrapper object itself if the service is set to be wrapped in the config.
+					if(wrapped && delegate) { 
+						// if wrapped and delegate then the method is defined in the delegate object of the wrapper
+						basicResult = method.invoke(((ServiceWrapper)service).delegate, values);
+					}
+					else {
+						// No delegation method can be found in class from the object of service: 
+						basicResult = method.invoke(service, values);
+					}
+					if(logger.isDebugEnabled()) {
+						logger.debug("Invocation ready. Result is: {}", basicResult);
+					}
+					FileUtil.serializeObject(service, getServicePath(clazz, objectId));
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
@@ -360,13 +437,27 @@ public class HttpServiceServer {
 			String[] parts = opName.split("::");
 			String objectId = parts[0];
 			Object object = state.get(objectId);
+			String methodName = parts[1];
+			
 			if (object instanceof ServiceHandle)
 				object = ((ServiceHandle) object).service;
-			String methodName = parts[1];
+			
 			Method method = getMethod(object.getClass(), methodName, types);
-			fqOpName = object.getClass().getName() + "::" + methodName;
-
-			/* rewrite values according to the choice */
+			if (method == null ) {
+				// method wasn't found. 
+				// maybe this service is wrapped.
+				if(object instanceof ServiceWrapper) {
+					object = ((ServiceWrapper) object).delegate;
+					method = getMethod(object.getClass(), methodName, types);
+				}
+			}
+			if(!(object instanceof ServiceWrapper)){
+				fqOpName = object.getClass().getName() + "::" + methodName;
+			} else { 
+				// its a wrapper
+				fqOpName = ((ServiceWrapper) object).delegate.getClass().getName() + "::" + methodName;
+			}
+			/* parse semantic types to the required types */
 			Class<?>[] requiredTypes = method.getParameterTypes();
 			for (int i = 0; i < requiredTypes.length; i++) {
 				if (!requiredTypes[i].isPrimitive() && !requiredTypes[i].getName().equals("String")) {
@@ -409,7 +500,16 @@ public class HttpServiceServer {
 					processedResult != null ? (processedResult instanceof Number || processedResult instanceof String ? processedResult : otms.objectToJson(processedResult))
 							: null);
 		}
-		return result;
+	}
+	
+	/**
+	 * Creates the file path for the given classpath and serviceid.
+	 * @param serviceClasspath classpath of the service.
+	 * @param serviceId id of the service.
+	 * @return file path to the service.
+	 */
+	private String getServicePath(String serviceClasspath, String serviceId) {
+		return folder + File.separator + "objects" + File.separator + serviceClasspath + File.separator + serviceId;
 	}
 
 	private Constructor<?> getConstructor(Class<?> clazz, String[] types) {
@@ -433,17 +533,20 @@ public class HttpServiceServer {
 				if (!requiredTypes[i].getName().equals(providedTypes[i]))
 					return false;
 			} else {
-				if (!otms.isLinkImplemented(providedTypes[i], requiredTypes[i]))
+				if (!otms.isLinkImplemented(providedTypes[i], requiredTypes[i])) {
+					logger.debug("The required type is: ", requiredTypes[i] + " but the provided one has semantic type of " + requiredTypes[i]);
 					return false;
-				logger.debug("Type: ", requiredTypes[i]);
+				}
 			}
 		}
 		return true;
 	}
 
 	private Method getMethod(Class<?> clazz, String methodName, String[] types) {
-		if (!supportedOperations.contains(clazz.getName() + "::" + methodName))
-			throw new IllegalArgumentException("The operation " + clazz.getName() + "::" + methodName + " is not supported by this server.");
+		if (!supportedOperations.contains(clazz.getName() + "::" + methodName)) {
+			logger.info("The operation " + clazz.getName() + "::" + methodName + " is not supported by this server.");
+			return null;
+		}
 		for (Method method : clazz.getMethods()) {
 			if (!method.getName().equals(methodName))
 				continue;
@@ -459,10 +562,10 @@ public class HttpServiceServer {
 	}
 
 	public HttpServiceServer(int port) throws IOException {
-		this(port, "conf/operations.conf");
+		this(port, "conf/operations.conf", "conf/classes.json");
 	}
 
-	public HttpServiceServer(int port, String FILE_CONF_OPS) throws IOException {
+	public HttpServiceServer(int port, String FILE_CONF_OPS, String FILE_CONF_CLASSES) throws IOException {
 		for (String op : FileUtil.readFileAsList(FILE_CONF_OPS)) {
 			if (op.trim().startsWith("#") || op.trim().isEmpty())
 				continue;
@@ -488,6 +591,7 @@ public class HttpServiceServer {
 				}
 			}
 		}
+		this.classesConfig = new ClassesConfiguration(FILE_CONF_CLASSES);
 		otms = new OntologicalTypeMarshallingSystem();
 		clientForSubSequentCalls = new HttpServiceClient(otms);
 		server = HttpServer.create(new InetSocketAddress(port), 0);

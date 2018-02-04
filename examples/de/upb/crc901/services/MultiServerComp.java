@@ -31,7 +31,7 @@ public class MultiServerComp {
 	public void init() throws Exception {
 
 		/* start server */
-		server = new HttpServiceServer(JASEPORT, "testrsc/conf/operations.conf");
+		server = new HttpServiceServer(JASEPORT, "testrsc/conf/operations.conf", "testrsc/conf/classes.json");
 
 		/* read in composition */
 		sqs = new SequentialCompositionSerializer();

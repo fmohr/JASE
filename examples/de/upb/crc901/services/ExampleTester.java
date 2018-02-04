@@ -78,7 +78,7 @@ public class ExampleTester {
 	public void init() throws Exception {
 
 		/* start server */
-		server = new HttpServiceServer(PORT, "testrsc/conf/operations.conf");
+		server = new HttpServiceServer(PORT, "testrsc/conf/operations.conf", "testrsc/conf/classes.json");
 
 		/* read in composition */
 		sqs = new SequentialCompositionSerializer();
@@ -99,7 +99,7 @@ public class ExampleTester {
 		/* create and train classifier service */
 		String className = RandomTree.class.getName();
 		String serviceId = client.callServiceOperation("127.0.0.1:" + PORT + "/" + className + "::__construct").get("out").asText();
-		client.callServiceOperation(serviceId + "::buildClassifier", split.get(0));
+		client.callServiceOperation(serviceId + "::train", split.get(0));
 
 		/* eval instances on service */
 		int mistakes = 0;
@@ -109,10 +109,32 @@ public class ExampleTester {
 			if (prediction != i.classValue())
 				mistakes++;
 		}
+		
+		ServiceCompositionResult result =  client.callServiceOperation(serviceId + "::predict", split.get(1));
+		List<String> predictions = new ObjectMapper().
+				readValue(result.get("out").get("data").traverse(), 
+				new TypeReference<ArrayList<String>>(){});
+		
+		for(String predictedLabel : predictions) {
+			int index = wekaInstances.classAttribute().indexOfValue(predictedLabel);
+			Assert.assertNotEquals(-1, index);
+		}
+		
 
+		result =  client.callServiceOperation(serviceId + "::predict_and_score", split.get(1));
+		Double score = new ObjectMapper().readValue(result.get("out").traverse(), Double.class);
+		
+		
 		/* report score */
 		System.out.println(mistakes + "/" + split.get(1).size());
-		System.out.println("Accuracy: " + MathExt.round(1 - mistakes * 1f / split.get(1).size(), 2));
+		double clientside_score = MathExt.round(1 - mistakes * 1f / split.get(1).size(), 2);
+		score = MathExt.round(score, 2);
+		
+		System.out.println("Accuracy calculated by client: " + clientside_score);
+		System.out.println("Accuracy by predict_and_score method: " + score);
+		
+		Assert.assertEquals(clientside_score, score, 0.01);
+		
 	}
 
 	@Test
@@ -123,10 +145,10 @@ public class ExampleTester {
 		System.out.println(sqs.serializeComposition(composition));
 		File imageFile = new File("testrsc/FelixMohr.jpg");
 		FastBitmap fb = new FastBitmap(imageFile.getAbsolutePath());
-		//JOptionPane.showMessageDialog(null, fb.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
+		JOptionPane.showMessageDialog(null, fb.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
 		ServiceCompositionResult resource = client.invokeServiceComposition(composition, fb);
 		FastBitmap result = otms.jsonToObject(resource.get("fb3"), FastBitmap.class);
-		//JOptionPane.showMessageDialog(null, result.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
+		JOptionPane.showMessageDialog(null, result.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
 	}
 	
 	@Test

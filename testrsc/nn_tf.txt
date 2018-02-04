@@ -1,0 +1,4 @@
+neuralnet =  localhost:5000/tflib.NeuralNet::__construct({i1=3});
+empty = neuralnet::train({i1=i1});
+Accuracy = neuralnet::predict_and_score({i1=i2});
+Predictions = neuralnet::predict({i1=i3});

@@ -75,10 +75,9 @@ public class OntologicalTypeMarshallingSystem {
 			throw new UnsupportedOperationException("Cannot convert objects of type " + o.getClass().getName()
 					+ " to JSON. The necessary serializer class \"de.upb.crc901.services.typeserializers." + o.getClass().getSimpleName() + "OntologySerializer\" was not found.");
 		} catch (IllegalAccessException | InvocationTargetException | IllegalArgumentException | InstantiationException | NoSuchMethodException e) {
-			e.printStackTrace();
 			throw new UnsupportedOperationException(
 					"Cannot convert objects of type " + o.getClass().getName() + " to JSON objects. The necessary serializer class \"de.upb.crc901.services.typeserializers."
-							+ o.getClass().getSimpleName() + "OntologySerializer\" throws an exception.");
+							+ o.getClass().getSimpleName() + "OntologySerializer\" throws an exception.",e);
 		}
 	}
 
@@ -93,7 +92,7 @@ public class OntologicalTypeMarshallingSystem {
 		/* determine serializer */
 		try {
 			Class<?> serializerClass = Class.forName("de.upb.crc901.services.typeserializers." + clazz.getSimpleName() + "OntologySerializer");
-			Method method = MethodUtils.getAccessibleMethod(serializerClass, "unserialize", JsonNode.class);
+			Method method = MethodUtils.getAccessibleMethod(serializerClass, "unserialize", JASEDataObject.class);
 			if (method == null)
 				throw new UnsupportedOperationException("Cannot convert objects of type " + type + " to a Java object of class " + clazz.getName()
 						+ ". The serializer class \"de.upb.crc901.services.typeserializers." + clazz.getSimpleName()
@@ -104,7 +103,8 @@ public class OntologicalTypeMarshallingSystem {
 				throw new ClassCastException("The ontological serializer for " + clazz.getSimpleName() + " does not implement the IOntologySerializer interface!");
 
 			/* unserialize the JSON string to an actual Java object */
-			return (T) method.invoke(rawSerializer, json.get("data"));
+			JASEDataObject jdo = JASEDataObject.FROM_JSON(json);
+			return (T) method.invoke(rawSerializer, jdo);
 		} catch (ClassNotFoundException e) {
 			throw new UnsupportedOperationException("Cannot convert objects of type " + type + " to a Java object of class " + clazz.getName()
 					+ ". The necessary serializer class \"de.upb.crc901.services.typeserializers." + clazz.getSimpleName() + "OntologySerializer\" was not found.");

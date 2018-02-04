@@ -38,6 +38,7 @@ import javax.swing.JOptionPane;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -87,9 +88,7 @@ public class PaseCallsTests {
 
         // Parse inputs from 'testrsc/pase_composition1_data.json' to Instances and Instance
         // Until the marshalling system is implemented the client has to parse the data.
-        byte[] encoded = Files.readAllBytes(Paths.get("testrsc/pase_composition1_data.json"));
-        String data_string = new String(encoded, Charset.defaultCharset());
-        encoded = null; 
+        String data_string = FileUtil.readFileAsString("testrsc/pase_composition1_data.json");
         JsonNode data_dict = new ObjectMapper().readTree(data_string);
         JsonNode training_set = data_dict.get("training_set");
         JsonNode prediction_set = data_dict.get("prediction_set");
@@ -107,12 +106,12 @@ public class PaseCallsTests {
         int expectedPredictionCount = 20;
         
 		// extract perdiciton array:
-		List<Double> predictions = new ObjectMapper().readValue(resource.get("prediction").traverse(), new TypeReference<ArrayList<String>>(){});
+		List<String> predictions = new ObjectMapper().readValue(resource.get("prediction").traverse(), new TypeReference<ArrayList<String>>(){});
 		Assert.assertEquals(expectedPredictionCount, predictions.size());
 		// see if the predicted label is contained in the list  of available one.
 		for(int i = 0; i < predictions.size(); i++){
 
-			//System.out.print("\"" + predictions.get(i) + "\",");
+			System.out.print("\"" + predictions.get(i) + "\",");
 			if(! expectedLabels.contains(predictions.get(i))) {
 				Assert.fail(predictions.get(i) + " was predicted at " + i + " but isn't contained in " + expectedLabels.toString());
 			}
@@ -136,7 +135,8 @@ public class PaseCallsTests {
 	@Test
 	public void testPaseServiceOperation() throws Exception{
 		ServiceCompositionResult result = client.callServiceOperation("localhost:5000/plainlib.package1.b.B::__construct", 1,2);
-		System.out.println(result);
+		Assert.assertEquals("plainlib.package1.b.B", result.get("class").asText());
+		Assert.assertTrue(result.containsKey("id"));
 	}
 	
 }
