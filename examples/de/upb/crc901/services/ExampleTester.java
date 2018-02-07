@@ -78,7 +78,7 @@ public class ExampleTester {
 	public void init() throws Exception {
 
 		/* start server */
-		server = new HttpServiceServer(PORT, "testrsc/conf/operations.conf", "testrsc/conf/classes.json");
+		server = HttpServiceServer.TEST_SERVER();
 
 		/* read in composition */
 		sqs = new SequentialCompositionSerializer();

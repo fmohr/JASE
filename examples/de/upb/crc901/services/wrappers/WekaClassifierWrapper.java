@@ -3,16 +3,12 @@ package de.upb.crc901.services.wrappers;
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 import java.util.TreeSet;
-
-import org.apache.commons.collections4.map.HashedMap;
 
 import de.upb.crc901.services.core.ServiceWrapper;
 import jaicore.basic.MathExt;
-import jaicore.ml.WekaUtil;
 import jaicore.ml.core.SimpleInstancesImpl;
-import jaicore.ml.core.SimpleLabeledInstanceImpl;
 import jaicore.ml.core.SimpleLabeledInstancesImpl;
 import jaicore.ml.interfaces.Instance;
 import jaicore.ml.interfaces.LabeledInstance;
@@ -35,7 +31,7 @@ public class WekaClassifierWrapper extends ServiceWrapper{
 		super(delegateConstructor, values);
 		
 		try {
-			freshClassifier = weka.classifiers.AbstractClassifier.makeCopy(((Classifier) this.delegate));
+			freshClassifier = weka.classifiers.AbstractClassifier.makeCopy(((Classifier) super.delegate));
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
@@ -44,6 +40,9 @@ public class WekaClassifierWrapper extends ServiceWrapper{
 	/** A fresh copy of super.delegate right after it is created. This is used to reset the classifier in declareClasses function. */
 	private final Classifier freshClassifier;
 
+	/** Flag that indicated weather or not declare_classes was invoked. */
+	private boolean declaredClasses = false;
+	
 	/**
 	 * 	Increment this version-ID if the class changes in a way that it becomes incompatible with serializations of the previous version. 
 	 */
@@ -57,7 +56,7 @@ public class WekaClassifierWrapper extends ServiceWrapper{
 	private ArrayList<Attribute> attributeList;
 	
 	/** Use TreeSet to get O(log(n)) time for add and contains. */
-	private TreeSet<String> classLabelSet = new TreeSet<String>(); 
+	private Set<String> classLabelSet = new TreeSet<String>(); 
 	
 
 	/**
@@ -132,6 +131,7 @@ public class WekaClassifierWrapper extends ServiceWrapper{
 			}
 	    		
 	    }
+	    declaredClasses = true;
 	}
 	
 	
@@ -146,8 +146,10 @@ public class WekaClassifierWrapper extends ServiceWrapper{
 		}
 		// does the data match in column size?
 		checkAttributes(trainingData.getNumberOfColumns());
-		// store the classes defined in the given data.
-		declare_classes(trainingData);
+		// store the classes defined in the given data if it didn't happen before.
+		if(!declaredClasses) {
+			declare_classes(trainingData);
+		}
 		
 		// Now create a weka.core.Instances object and fill our data to it.
 		Instances trainingInstances = createWekaInstances(trainingData);
