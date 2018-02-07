@@ -50,7 +50,7 @@ public class DeployTests {
 	@BeforeClass
 	public static void setUpBeforeClass() throws Exception {
 		/* start server */
-		server = new HttpServiceServer(PORT, "testrsc/conf/operations.conf", "testrsc/conf/classes.json");
+		server = HttpServiceServer.TEST_SERVER();
 		
 		client = new HttpServiceClient(otms);
 		wekaInstances = new Instances(
@@ -58,6 +58,9 @@ public class DeployTests {
 						"../CrcTaskBasedConfigurator/testrsc" +
 								File.separator + "polychotomous" +
 								File.separator + "audiology.arff")));	
+//								File.separator + "secom" +
+//								File.separator + "test.arff")));
+
 		wekaInstances.setClassIndex(wekaInstances.numAttributes() - 1);
 		
 	}

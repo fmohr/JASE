@@ -46,6 +46,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import javax.management.RuntimeErrorException;
+
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.slf4j.Logger;
@@ -79,17 +81,55 @@ public class HttpServiceServer {
 	private final HttpServiceClient clientForSubSequentCalls;
 	private final OntologicalTypeMarshallingSystem otms;
 	private final ClassesConfiguration classesConfig;
-	private final Set<String> supportedOperations = new HashSet<>();
-	private final Map<String, Map<String, String>> resultMaps = new HashMap<>();
+//	private final Set<String> supportedOperations = new HashSet<>();
+//	private final Map<String, Map<String, String>> resultMaps = new HashMap<>();
 
 	class ServiceHandle {
-		String id;
-		Object service;
+		private final String id;
+		private final Object service;
 
-		public ServiceHandle(String id, Object service) {
+		/**
+		 * Standard constructor
+		 * @param id Id which the service can be accessed through
+		 * @param service inner service
+		 */
+		ServiceHandle(String id, Object service) {
 			super();
 			this.id = id;
 			this.service = service;
+		}
+		
+		/**
+		 * Constructor which is used to indicate that the serialization has failed.
+		 * @param service inner service
+		 */
+		ServiceHandle(Object service) {
+			super();
+			this.id = null;
+			this.service = service; 
+		}
+		
+		/**
+		 * If id is set to null, the service couldn't be serialized (see the invokeOperation method)
+		 * This the server shouldn't return this servicehandle to the client. (see 
+		 * 
+		 * @return True if the inner service was serialized to disk.
+		 */
+		public boolean wasSerialized() {
+			return id!=null;
+		}
+
+		/**
+		 * Returns the id of the service. Throws Runtime-Exception if wasSerialized() returns false.
+		 */
+		public String getId() {
+			if(wasSerialized()) {
+				return id;
+			}
+			else {
+				// this service wasn't serialized. so the id shouldn't be accessed.
+				throw new RuntimeException("The service wasn't serialized. Can't access the id.");
+			}
 		}
 	}
 
@@ -226,9 +266,13 @@ public class HttpServiceServer {
 							objectsToReturn.put(key, (Double) answerObject);
 						else if (answerObject instanceof Integer)
 							objectsToReturn.put(key, (Integer) answerObject);
-						else if (answerObject instanceof ServiceHandle)
-							objectsToReturn.put(key, t.getLocalAddress().toString().substring(1) + "/" + clazz + "/" + ((ServiceHandle) answerObject).id);
-						else
+						else if (answerObject instanceof ServiceHandle) {
+							ServiceHandle handle = (ServiceHandle) answerObject;
+							if(handle.wasSerialized()) {
+								// Return the handle only if the service was serialized and can be accessed.
+								objectsToReturn.put(key, t.getLocalAddress().toString().substring(1) + "/" + clazz + "/" + handle.getId());
+							}
+						}else
 							throw new IllegalArgumentException("Do not know how to treat object " + answerObject + " as it is not serialized to some json thing");
 					}
 				}
@@ -310,6 +354,8 @@ public class HttpServiceServer {
 		/* if this operation is a constructor, create the corresponding service and return the url */
 		String opName = operationInvocation.getOperation().getName();
 		Map<VariableParam, VariableParam> outputMapping = operationInvocation.getOutputMapping();
+		String clazz = "";
+		String methodName = "";
 		String fqOpName = "";
 		Object basicResult = null;
 		if (opName.contains("/")) { // if this is a service called via an address
@@ -318,17 +364,24 @@ public class HttpServiceServer {
 
 			fqOpName = opName;
 			String[] parts = opName.substring(opName.indexOf("/") + 1).split("::");
-			String clazz = parts[0];
-			String methodName = parts[1];
+			clazz = parts[0];
+			methodName = parts[1];
 			if (methodName.equals("__construct")) {
 				logger.info("The invocation creates a new service instance");
-
-				Constructor<?> constructor = getConstructor(Class.forName(clazz), types);
+				Class serviceClass = null;
+				try {
+					serviceClass = Class.forName(clazz);;
+				} catch(java.lang.ClassNotFoundException ex) {
+					logger.error("CLASS NOT FOUND : " + clazz);
+					return;
+				}
+				Constructor<?> constructor = getConstructor(serviceClass, types);
 				if (logger.isDebugEnabled())
 					logger.debug("{}/{}/{}", types.length, constructor.getParameterCount(), constructor);
 				
 				Object newService = null;
 				
+				 
 				boolean wrapped = classesConfig.isWrapped(clazz); // true if this class is supposed to be wrapped.
 				ServiceWrapper wrapper = null;
 				if(wrapped) { // create the wrapper.
@@ -353,23 +406,25 @@ public class HttpServiceServer {
 				else {
 					sh = new ServiceHandle(id, wrapper);
 				}
-				state.put(outputMapping.values().iterator().next().getName(), sh);
-				
+				boolean serializationSuccess = false; // be pessimistic about result. Set to true if it worked.
 				// if wrapped and wrappers'delegate can be serialized or it wasn't wrapped and the service itself can be serialized.
 				if (newService instanceof Serializable) {  
 					/* serialize result */
 					try {
 						FileUtil.serializeObject(wrapped ? wrapper : newService, getServicePath(clazz, id));
+						// no problems occurred.. success
+						serializationSuccess = true;
 					} catch (IOException e) {
 						logger.error(e.getMessage() + "\n" + Arrays.toString(e.getStackTrace()));
-						/* set to null to indicate that this service wasn't serialized. */
-						sh.id = null; 
 					}
 				}
-				else {
-					/* set to null to indicate that this service wasn't serialized. */
-					sh.id = null; 
+				if(!serializationSuccess) {
+					// serialization wasn't successful.
+					/* reset the ServiceHandle with id = null to indicate that this service wasn't serialized successfully. */
+					sh = new ServiceHandle(sh.service);
 				}
+				// Put the handler into the state.
+				state.put(outputMapping.values().iterator().next().getName(), sh);
 				return;
 			}
 
@@ -415,32 +470,40 @@ public class HttpServiceServer {
 							values[i] = otms.jsonToObject((JsonNode) values[i], requiredTypes[i]);
 						}
 					}
-					// invoke method from service.
-					// service is the wrapper object itself if the service is set to be wrapped in the config.
-					if(wrapped && delegate) { 
-						// if wrapped and delegate then the method is defined in the delegate object of the wrapper
-						basicResult = method.invoke(((ServiceWrapper)service).delegate, values);
+					try {
+						// invoke method from service.
+						// service is the wrapper object itself if the service is set to be wrapped in the config.
+						if(wrapped && delegate) { 
+							// if wrapped and delegate then the method is defined in the delegate object of the wrapper
+							basicResult = method.invoke(((ServiceWrapper)service).delegate, values);
+						}
+						else {
+							// No delegation method can be found in class from the object of service: 
+							basicResult = method.invoke(service, values);
+						}
 					}
-					else {
-						// No delegation method can be found in class from the object of service: 
-						basicResult = method.invoke(service, values);
+					catch(Exception e) {
+						logger.error(operationInvocation + " error: " + e.getMessage());
 					}
 					if(logger.isDebugEnabled()) {
 						logger.debug("Invocation ready. Result is: {}", basicResult);
 					}
 					FileUtil.serializeObject(service, getServicePath(clazz, objectId));
+					
 				} catch (IOException e) {
 					e.printStackTrace();
-				}
+				} 
 			}
 		} else { // if this is a call on a created services (this cannot be a constructor)
 			String[] parts = opName.split("::");
 			String objectId = parts[0];
 			Object object = state.get(objectId);
-			String methodName = parts[1];
+			methodName = parts[1];
 			
-			if (object instanceof ServiceHandle)
+			if (object instanceof ServiceHandle) {
 				object = ((ServiceHandle) object).service;
+			}
+			clazz = object.getClass().getName();
 			
 			Method method = getMethod(object.getClass(), methodName, types);
 			if (method == null ) {
@@ -472,33 +535,41 @@ public class HttpServiceServer {
 
 		/* compute the result of the invocation (resolve call-by-reference outputs) */
 		OperationInvocationResult result = new OperationInvocationResult();
-		if (resultMaps.containsKey(fqOpName)) {
-			Map<String, String> map = resultMaps.get(fqOpName);
-			for (String key : map.keySet()) {
-				String val = map.get(key);
-				if (val.equals("return")) {
-					result.put(key, basicResult);
-				} else if (val.matches("i[\\d]+")) {
-					int inputIndex = Integer.parseInt(val.substring(1));
-					result.put(key, values[inputIndex - 1]);
-				} else {
-					logger.error("Cannot process result map entry {}", val);
-				}
+		
+		Map<String, String> map = classesConfig.getMethodResultMap(clazz, methodName);
+		for (String key : map.keySet()) {
+			String val = map.get(key);
+			if (val.equals("return")) {
+				result.put(key, basicResult);
+			} else if (val.matches("i[\\d]+")) {
+				int inputIndex = Integer.parseInt(val.substring(1));
+				result.put(key, values[inputIndex - 1]);
+			} else {
+				logger.error("Cannot process result map entry {}", val);
 			}
-		} else
-			result.put("out", basicResult);
+		}
+		
 
 		/* now update state table based on result mapping */
 		for (String key : result.keySet()) {
 			VariableParam targetParam = outputMapping.get(new VariableParam(key));
 			if (targetParam == null)
 				throw new IllegalArgumentException("The parameter " + key + " used in the result mapping of " + fqOpName
-						+ " is not a declared output parameter of the operation! Declared output params are: " + operationInvocation.getOperation().getOutputParameters());
+						+ " is not a declared output parameter of the operation! "
+						+ "Declared output params are: " + operationInvocation.getOperation().getOutputParameters());
 			String nameOfStateVariableToStoreResultIn = targetParam.getName();
 			Object processedResult = result.get(key);
+			Object objectToStore = null;
+			if(processedResult != null) {
+				 if(processedResult instanceof Number || processedResult instanceof String) {
+					objectToStore = processedResult;
+				 }
+				 else {	
+					 objectToStore = otms.objectToJson(processedResult); //  TODO do we really need to translate to json again?
+				 }
+			}
 			state.put(nameOfStateVariableToStoreResultIn,
-					processedResult != null ? (processedResult instanceof Number || processedResult instanceof String ? processedResult : otms.objectToJson(processedResult))
-							: null);
+					objectToStore);
 		}
 	}
 	
@@ -513,8 +584,9 @@ public class HttpServiceServer {
 	}
 
 	private Constructor<?> getConstructor(Class<?> clazz, String[] types) {
-		if (!supportedOperations.contains(clazz.getName() + "::__construct"))
+		if (!classesConfig.classknown(clazz.getName())) {
 			throw new IllegalArgumentException("This server is not configured to create new objects of " + clazz);
+		}
 		for (Constructor<?> constr : clazz.getDeclaredConstructors()) {
 			Class<?> requiredParams[] = constr.getParameterTypes();
 			if (matchParameters(requiredParams, types))
@@ -543,7 +615,7 @@ public class HttpServiceServer {
 	}
 
 	private Method getMethod(Class<?> clazz, String methodName, String[] types) {
-		if (!supportedOperations.contains(clazz.getName() + "::" + methodName)) {
+		if (!classesConfig.methodKnown(clazz.getName(), methodName)) {
 			logger.info("The operation " + clazz.getName() + "::" + methodName + " is not supported by this server.");
 			return null;
 		}
@@ -562,35 +634,43 @@ public class HttpServiceServer {
 	}
 
 	public HttpServiceServer(int port) throws IOException {
-		this(port, "conf/operations.conf", "conf/classes.json");
+		this(port, "conf/classes.json");
+	}
+	
+	/**
+	 * Creates the standard test server.
+	 */
+	public static HttpServiceServer TEST_SERVER() throws IOException {
+		return new HttpServiceServer(8000, "testrsc/conf/classes.json");
 	}
 
-	public HttpServiceServer(int port, String FILE_CONF_OPS, String FILE_CONF_CLASSES) throws IOException {
-		for (String op : FileUtil.readFileAsList(FILE_CONF_OPS)) {
-			if (op.trim().startsWith("#") || op.trim().isEmpty())
-				continue;
-			String[] split = op.split("\t");
-			String opName = split[0].trim();
-			supportedOperations.add(opName);
-
-			/* if an output mapping is given, add it */
-			if (split.length > 1) {
-				String map = split[split.length - 1].trim();
-				if (!map.startsWith("{") || !map.endsWith("}")) {
-					logger.warn("Result mapping {} for operator is malformed", map, split[0]);
-				}
-				resultMaps.put(opName, new HashMap<>());
-				Map<String, String> resultMap = resultMaps.get(opName);
-				for (String mapEntry : map.substring(1, map.length() - 1).split(",")) {
-					String[] kv = mapEntry.split("=");
-					if (kv.length != 2) {
-						logger.error("Entry {} in result mapping {} is malformed", mapEntry, map);
-					} else {
-						resultMap.put(kv[0].trim(), kv[1].trim());
-					}
-				}
-			}
-		}
+	public HttpServiceServer(int port, String FILE_CONF_CLASSES) throws IOException {
+		/* moved the operation configuration into the classes.json configuration for more flexibility.*/
+//		for (String op : FileUtil.readFileAsList(FILE_CONF_OPS)) {
+//			if (op.trim().startsWith("#") || op.trim().isEmpty())
+//				continue;
+//			String[] split = op.split("\t");
+//			String opName = split[0].trim();
+//			supportedOperations.add(opName);
+//			// TODO
+//			/* if an output mapping is given, add it */
+//			if (split.length > 1) {
+//				String map = split[split.length - 1].trim();
+//				if (!map.startsWith("{") || !map.endsWith("}")) {
+//					logger.warn("Result mapping {} for operator is malformed", map, split[0]);
+//				}
+//				resultMaps.put(opName, new HashMap<>());
+//				Map<String, String> resultMap = resultMaps.get(opName);
+//				for (String mapEntry : map.substring(1, map.length() - 1).split(",")) {
+//					String[] kv = mapEntry.split("=");
+//					if (kv.length != 2) {
+//						logger.error("Entry {} in result mapping {} is malformed", mapEntry, map);
+//					} else {
+//						resultMap.put(kv[0].trim(), kv[1].trim());
+//					}
+//				}
+//			}
+//		}
 		this.classesConfig = new ClassesConfiguration(FILE_CONF_CLASSES);
 		otms = new OntologicalTypeMarshallingSystem();
 		clientForSubSequentCalls = new HttpServiceClient(otms);
@@ -606,5 +686,9 @@ public class HttpServiceServer {
 
 	public static void main(String[] args) throws Exception {
 		new HttpServiceServer(8000);
+	}
+
+	public ClassesConfiguration getClassesConfig() {
+		return classesConfig;
 	}
 }
