@@ -26,6 +26,7 @@ package de.upb.crc901.services.core;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.Serializable;
@@ -146,7 +147,13 @@ public class HttpServiceServer {
 				logger.info("Received query for {}", address);
 
 				/* initiate state with the non-constant inputs given in post (non-int and non-doubles are treated as strings) */
-				HttpBody body = HttpBody.decode(t, otms);
+				if ((!"post".equalsIgnoreCase(t.getRequestMethod()))) {
+					throw new UnsupportedEncodingException("No post request");
+				}
+				InputStream input =  t.getRequestBody();//new InputStreamReader(t.getRequestBody(), "utf-8");
+				
+				HttpBody body = new HttpBody();
+				body.readfromBody(input);
 				
 				String[] parts = address.split("/", 3);
 				String clazz = parts[0];
@@ -155,7 +162,7 @@ public class HttpServiceServer {
 					objectId = parts[1];
 				}
 				else if(clazz.equals("choreography")) { // choreography call:
-					if(!body.containsCoreography()) {
+					if(!body.containsComposition()) {
 						response += "objectID and no choreography was given.";
 						throw new RuntimeException(response);
 					}
@@ -172,7 +179,7 @@ public class HttpServiceServer {
 					throw new RuntimeException(response);
 				}
 
-				Map<String, Object> initialState = body.getInputs();
+				Map<String, Object> initialState = null; // body.getKeyworkArgs();
 				Map<String, Object> state = new HashMap<>(initialState);
 				logger.info("Input keys are: {}", initialState.keySet());
 
@@ -183,8 +190,8 @@ public class HttpServiceServer {
 				SequentialComposition comp = null;
 				SequentialComposition subsequenceComp = new SequentialComposition(new CompositionDomain());
 				OperationInvocation invocationToMakeFromHere = null;
-				if (body.containsCoreography()) {
-					comp = body.getComposition();
+				if (body.containsComposition()) {
+					comp = body.getSequentialComposition();
 					Iterator<OperationInvocation> it = comp.iterator();
 					Collection<String> servicesInExecEnvironment = new HashSet<>();
 					for (int i = 0; it.hasNext(); i++) {

@@ -26,6 +26,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -54,6 +55,7 @@ public class HttpServiceClient {
 	public HttpServiceClient(OntologicalTypeMarshallingSystem otms) {
 		super();
 		this.otms = otms;
+		
 	}
 
 	public ServiceCompositionResult callServiceOperation(String serviceCall, Object... inputs) throws IOException {
@@ -65,6 +67,7 @@ public class HttpServiceClient {
 	}
 
 	public ServiceCompositionResult callServiceOperation(OperationInvocation call, SequentialComposition coreography, Object... additionalInputs) throws IOException {
+		
 		return callServiceOperation(call, coreography, ServiceUtil.getObjectInputMap(additionalInputs));
 	}
 
@@ -95,8 +98,12 @@ public class HttpServiceClient {
 			serializedCoreography = new SequentialCompositionSerializer().serializeComposition(coreography);
 		}
 		// create body, encode it and write it to the outputstream.
-		HttpBody body = new HttpBody(additionalInputs, serializedCoreography, index, -1);
-		String encoding = body.encode(otms);
+		HttpBody body = new HttpBody(); // new HttpBody(additionalInputs, serializedCoreography, index, -1);
+		body.setComposition(serializedCoreography);
+		body.setCurrentIndex(index);
+		for(String keyword: additionalInputs.keySet()) {
+			body.addUnparsedKeywordArgument(otms, keyword, additionalInputs.get(keyword));
+		}
 
 		/* setup connection */
 		URL url = new URL("http://" + host + "/" + service + "/" + opName);
@@ -109,10 +116,10 @@ public class HttpServiceClient {
 		con.setDoOutput(true);
 		
 		/* send data */
-		DataOutputStream wr = new DataOutputStream(con.getOutputStream());
-		wr.writeBytes(encoding);
-		wr.flush();
-		wr.close();
+		OutputStream out = con.getOutputStream();
+		body.writeBody(out);
+		out.flush();
+		out.close();
 
 		/* read and return answer */
 		StringBuilder content = new StringBuilder();

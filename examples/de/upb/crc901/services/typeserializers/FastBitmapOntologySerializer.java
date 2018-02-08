@@ -13,25 +13,28 @@ import de.upb.crc901.services.CatalanoWrapper;
 import de.upb.crc901.services.core.IOntologySerializer;
 import de.upb.crc901.services.core.JASEDataObject;
 import jaicore.ml.core.SimpleInstanceImpl;
+import jaicore.ml.interfaces.Instance;
 
 public class FastBitmapOntologySerializer implements IOntologySerializer<FastBitmap> {
 	
 	private static final List<String> supportedTypes = Arrays.asList(new String[] {"Instance"});
 	
 	public FastBitmap unserialize(final JASEDataObject jdo) {
-		return new FastBitmap(CatalanoWrapper.instance2FastBitmap(new SimpleInstanceImpl(jdo.getObject())));
+		if(jdo.getData() instanceof Instance) {
+			Instance instance = (Instance) jdo.getData();
+			return new FastBitmap(CatalanoWrapper.instance2FastBitmap(instance));
+		}
+		else {
+			typeMismatch(jdo);
+			return null;
+		}
 	}
 
 	public JASEDataObject serialize(final FastBitmap fb) {
-		try {
-			JsonNode object = (new ObjectMapper().readTree(CatalanoWrapper.fastBitmap2Instance(fb).toJson()));
-			String type = "Instance";
-			JASEDataObject jdo = new JASEDataObject(type, object);
-			return jdo;
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		return null;
+		Instance data = CatalanoWrapper.fastBitmap2Instance(fb);
+		String type = "Instance";
+		JASEDataObject jdo = new JASEDataObject(type, data);
+		return jdo;
 	}
 
 	@Override

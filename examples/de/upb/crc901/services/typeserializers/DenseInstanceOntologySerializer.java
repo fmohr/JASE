@@ -12,6 +12,7 @@ import de.upb.crc901.services.core.IOntologySerializer;
 import de.upb.crc901.services.core.JASEDataObject;
 import jaicore.ml.WekaUtil;
 import jaicore.ml.core.SimpleLabeledInstanceImpl;
+import jaicore.ml.interfaces.LabeledInstance;
 import weka.core.DenseInstance;
 
 public class DenseInstanceOntologySerializer implements IOntologySerializer<DenseInstance> {
@@ -19,31 +20,31 @@ public class DenseInstanceOntologySerializer implements IOntologySerializer<Dens
 	private static final List<String> supportedTypes = Arrays.asList(new String[] {"Instance", "LabeledInstance"});
 	
 	public DenseInstance unserialize(final JASEDataObject jdo) {
-		// Parse the inner JsonNode into LabeledInstance
-		SimpleLabeledInstanceImpl data = new SimpleLabeledInstanceImpl(jdo.getObject());
-		DenseInstance inst = new DenseInstance(WekaUtil.fromJAICoreInstance(data));
-		assert inst.dataset() != null : "No dataset assigned to instance " + inst;
-		return inst;
+		if(jdo.getData() instanceof LabeledInstance<?>) {
+			// Parse the inner JsonNode into LabeledInstance
+			LabeledInstance<String> data = (SimpleLabeledInstanceImpl) jdo.getData();
+			DenseInstance inst = new DenseInstance(WekaUtil.fromJAICoreInstance(data));
+			assert inst.dataset() != null : "No dataset assigned to instance " + inst;
+			return inst;
+		}
+		else {
+			throw new RuntimeException("Type mismatch!");
+		}
 	}
 
 	public JASEDataObject serialize(final DenseInstance instance) {
-		try {
-			JsonNode object;
-			String type;
-			if (instance.classIndex() < 0) {
-				object = new ObjectMapper().readTree(WekaUtil.toJAICoreInstance(instance).toJson());
-				type = "Instance";
-			}
-			else {
-				object = new ObjectMapper().readTree(WekaUtil.toJAICoreLabeledInstance(instance).toJson());
-				type = "LabeledInstance";
-			}
-			JASEDataObject jdo = new JASEDataObject(type, object);
-			return jdo;
-		} catch (IOException e) {
-			e.printStackTrace();
+		Object object;
+		String type;
+		if (instance.classIndex() < 0) {
+			object = WekaUtil.toJAICoreInstance(instance);
+			type = "Instance";
 		}
-		return null;
+		else {
+			object = WekaUtil.toJAICoreLabeledInstance(instance);
+			type = "LabeledInstance";
+		}
+		JASEDataObject jdo = new JASEDataObject(type, object);
+		return jdo;
 	}
 
 	@Override

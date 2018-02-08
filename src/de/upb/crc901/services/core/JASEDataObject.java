@@ -1,12 +1,14 @@
 package de.upb.crc901.services.core;
 
+import java.util.List;
+
 import com.fasterxml.jackson.databind.JsonNode;
 
 public class JASEDataObject {
 	private final String type;
-	private final JsonNode object;
+	private final Object object;
 
-	public JASEDataObject(String type, JsonNode object) {
+	public JASEDataObject(String type, Object object) {
 		super();
 		this.type = type;
 		this.object = object;
@@ -15,10 +17,11 @@ public class JASEDataObject {
 	public String getType() {
 		return type;
 	}
-
-	public JsonNode getObject() {
+	
+	public Object getData() {
 		return object;
 	}
+
 
 	@Override
 	public int hashCode() {
@@ -51,10 +54,16 @@ public class JASEDataObject {
 		return true;
 	}
 
-	public static final JASEDataObject FROM_JSON(JsonNode json) {
-		JsonNode object = json.get("data");
-		String type = json.get("type").asText();
-		return new JASEDataObject(type, object);
+	public static JASEDataObject FROM_JSON(JsonNode json) {
+		// TODO Auto-generated method stub
+		return null;
 	}
+	
+
+//	public static final JASEDataObject FROM_JSON(JsonNode json) {
+//		JsonNode object = json.get("data");
+//		String type = json.get("type").asText();
+//		return new JASEDataObject(type, object);
+//	}
 
 }

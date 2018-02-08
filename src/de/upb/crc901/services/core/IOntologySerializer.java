@@ -24,7 +24,10 @@ package de.upb.crc901.services.core;
 import java.util.Collection;
 
 public interface IOntologySerializer<T> {
-	public T unserialize(final JASEDataObject json);
+	public T unserialize(final JASEDataObject jdo);
 	public JASEDataObject serialize(final T object);
 	public Collection<String> getSupportedSemanticTypes();
+	public default RuntimeException typeMismatch(JASEDataObject jdo) {
+		return new RuntimeException("The type: " + jdo.getData().getClass() + " of the given instance doesn't match any of the supported types: " + getSupportedSemanticTypes());
+	}
 }

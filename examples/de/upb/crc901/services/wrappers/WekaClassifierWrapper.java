@@ -95,7 +95,7 @@ public class WekaClassifierWrapper extends ServiceWrapper{
 	 * 
 	 * @param labeledInstances List of data mapped onto labels. This function only cares for the labels so the column size may be 0.
 	 */
-	public void declare_classes(SimpleLabeledInstancesImpl labeledInstances) {
+	public void declare_classes(LabeledInstances<String> labeledInstances) {
 		/* extendedClasses indicates if the labeledInstances contains a label 
 		 * which wasn't specified in previous declareClasses invocations.
 		 * If true the wekaInstaces object will be extended so is the inner classifier.
@@ -140,7 +140,7 @@ public class WekaClassifierWrapper extends ServiceWrapper{
 	 * Uses buildClassifier method on the delegate object to 'train' it.
 	 * @param labeledInstances training data
 	 */
-	public void train(SimpleLabeledInstancesImpl trainingData) {
+	public void train(LabeledInstances<String> trainingData) {
 		if(trainingData.getNumberOfRows() < 1) { // no data. do nothing.
 			return; // :(
 		}
@@ -199,7 +199,7 @@ public class WekaClassifierWrapper extends ServiceWrapper{
 	/**
 	 * Takes Instances and returns a list of predictions made by the inner classifier.
 	 */
-	public List<String> predict(SimpleInstancesImpl instances) {
+	public List<String> predict(jaicore.ml.interfaces.Instances instances) {
 		return predictInstanceIterable(
 				instances, 
 				instances.getNumberOfRows(), 
@@ -210,7 +210,7 @@ public class WekaClassifierWrapper extends ServiceWrapper{
 	/**
 	 * Takes LabeledInstances and predicts ignoring the labels. 
 	 */
-	public List<String> predict(SimpleLabeledInstancesImpl labeledinstances)  {
+	public List<String> predict(LabeledInstances<String> labeledinstances)  {
 		return predictInstanceIterable(
 				labeledinstances, 
 				labeledinstances.getNumberOfRows(), 
