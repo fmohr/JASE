@@ -26,6 +26,20 @@ import java.util.HashMap;
 import com.fasterxml.jackson.databind.JsonNode;
 
 @SuppressWarnings("serial")
-public class ServiceCompositionResult extends HashMap<String, JsonNode> {
+public class ServiceCompositionResult extends HashMap<String, JASEDataObject> {
+
+	public void addBody(HttpBody returnedBody) {
+		for(String keyword : returnedBody.getKeyworkArgs().keySet()) {
+			super.put(keyword, returnedBody.getKeyworkArgs().get(keyword));
+		}
+		int index = 1;
+		for(JASEDataObject jdo :  returnedBody.getPositionalArgs()) {
+			super.put("i" + index, jdo);
+			index++;
+		}
+
+	}
+	
+	
 
 }

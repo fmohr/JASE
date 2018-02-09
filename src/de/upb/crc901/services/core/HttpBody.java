@@ -47,7 +47,7 @@ public final class HttpBody {
 
 	private static final String ARGLIST_FIELDNAME = "$arg_list$";
 	
-	private static final String PRIMITIVE_TYPE = "primitive";
+	public static final String PRIMITIVE_TYPE = "primitive";
 	
 	private String composition = null;
 	private int currentIndex = 0;
@@ -253,7 +253,11 @@ public final class HttpBody {
 	
 	private void writeObject(JsonGenerator jsonOut, JASEDataObject jdo) throws IOException {
 		if(isPrimitive(jdo)) {
+			jsonOut.writeStartObject();
+			jsonOut.writeStringField("type", jdo.getType());
+			jsonOut.writeFieldName("data");
 			jsonOut.writeObject(jdo.getData());
+			jsonOut.writeEndObject();
 		}else {
 			parseObjectAndWrite(jsonOut, jdo);
 		}
@@ -332,9 +336,9 @@ public final class HttpBody {
 			 String fieldname = jsonIn.getCurrentName();
 			 if(HttpBody.CHOREOGRAPGY_FIELDNAME.equals(fieldname)) {
 				 jsonIn.nextToken();
-				 String composition = jsonIn.getText();
-				 composition.replaceAll("\\\"", "\"");
-				 setComposition(jsonIn.getText());
+				 String composition = jsonIn.getValueAsString();
+//				 composition.replaceAll("\\\"", "\"");
+				 setComposition(composition);
 			 }
 			 else if(HttpBody.CURRENTINDEX_FIELDNAME.equals(fieldname)) {
 				 jsonIn.nextToken();
@@ -392,7 +396,18 @@ public final class HttpBody {
 	
 	private Object parseData(JsonParser jsonIn, String type) throws IOException {
 		if(HttpBody.PRIMITIVE_TYPE.equals(type)) {
-			return jsonIn.getCurrentValue();
+			if(jsonIn.getCurrentToken() == JsonToken.VALUE_NUMBER_INT) {
+				return jsonIn.getIntValue();
+			}
+			else if (jsonIn.getCurrentToken() == JsonToken.VALUE_NUMBER_FLOAT) {
+				return jsonIn.getDoubleValue();
+			}
+			else if (jsonIn.getCurrentToken() == JsonToken.VALUE_STRING) {
+				return jsonIn.getValueAsString();
+			}
+			else {
+				throw new RuntimeException("Can't parse this token to primitive type");
+			}
 		}else {
 			try {
 				String streamHandlerClassName = "de.upb.crc901.services.streamhandlers." + type + "StreamHandler";

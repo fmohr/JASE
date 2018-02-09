@@ -20,6 +20,7 @@ import de.upb.crc901.services.core.HttpServiceClient;
 import de.upb.crc901.services.core.HttpServiceServer;
 import de.upb.crc901.services.core.OntologicalTypeMarshallingSystem;
 import de.upb.crc901.services.core.ServiceCompositionResult;
+import de.upb.crc901.services.core.ServiceHandle;
 import jaicore.ml.WekaUtil;
 import weka.core.Instances;
 
@@ -87,13 +88,15 @@ public class WekaConfigTests {
 		for(String wekaClassifierClasspath : server.getClassesConfig().allSubconfigs(baseClassifierConfigName)) {
 			try {
 				// Create classifier service
-				String serviceId = client.callServiceOperation("localhost:" + PORT + "/" + wekaClassifierClasspath + "::__construct").get("out").asText();
+				String serviceId = ((ServiceHandle)client.callServiceOperation(
+							"localhost:" + PORT + "/" + wekaClassifierClasspath + "::__construct")
+								.get("out").getData()).getId();
 				Assert.assertNotNull(serviceId);
 				// train the classifier
 				client.callServiceOperation(serviceId + "::train", split.get(0));
 				// evaluate the classifier
 				ServiceCompositionResult result =  client.callServiceOperation(serviceId + "::predict_and_score", split.get(1));
-				Double score = new ObjectMapper().readValue(result.get("out").traverse(), Double.class);
+				Double score = (Double) result.get("out").getData();
 				
 				System.out.println("Accuracy of " + wekaClassifierClasspath + ": " + score);
 			} catch (Exception ex) {

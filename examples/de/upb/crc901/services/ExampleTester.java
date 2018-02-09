@@ -51,6 +51,7 @@ import de.upb.crc901.services.core.HttpServiceClient;
 import de.upb.crc901.services.core.HttpServiceServer;
 import de.upb.crc901.services.core.OntologicalTypeMarshallingSystem;
 import de.upb.crc901.services.core.ServiceCompositionResult;
+import de.upb.crc901.services.core.ServiceHandle;
 import jaicore.basic.FileUtil;
 import jaicore.basic.MathExt;
 import jaicore.ml.WekaUtil;
@@ -98,7 +99,8 @@ public class ExampleTester {
 
 		/* create and train classifier service */
 		String className = RandomTree.class.getName();
-		String serviceId = client.callServiceOperation("127.0.0.1:" + PORT + "/" + className + "::__construct").get("out").asText();
+		
+		String serviceId = ((ServiceHandle) client.callServiceOperation("127.0.0.1:" + PORT + "/" + className + "::__construct").get("out").getData()).getId();
 		client.callServiceOperation(serviceId + "::train", split.get(0));
 
 		/* eval instances on service */
@@ -111,9 +113,7 @@ public class ExampleTester {
 		}
 		
 		ServiceCompositionResult result =  client.callServiceOperation(serviceId + "::predict", split.get(1));
-		List<String> predictions = new ObjectMapper().
-				readValue(result.get("out").get("data").traverse(), 
-				new TypeReference<ArrayList<String>>(){});
+		List<String> predictions = (List<String>) result.get("out").getData();
 		
 		for(String predictedLabel : predictions) {
 			int index = wekaInstances.classAttribute().indexOfValue(predictedLabel);
@@ -122,7 +122,7 @@ public class ExampleTester {
 		
 
 		result =  client.callServiceOperation(serviceId + "::predict_and_score", split.get(1));
-		Double score = new ObjectMapper().readValue(result.get("out").traverse(), Double.class);
+		Double score = (Double) result.get("out").getData();
 		
 		
 		/* report score */
@@ -137,7 +137,7 @@ public class ExampleTester {
 		
 	}
 
-	@Test
+	//@Test
 	public void testImageProcessor() throws Exception {
 
 		/* create new classifier */
@@ -147,8 +147,8 @@ public class ExampleTester {
 		FastBitmap fb = new FastBitmap(imageFile.getAbsolutePath());
 		JOptionPane.showMessageDialog(null, fb.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
 		ServiceCompositionResult resource = client.invokeServiceComposition(composition, fb);
-		FastBitmap result = otms.jsonToObject(resource.get("fb3"), FastBitmap.class);
-		JOptionPane.showMessageDialog(null, result.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
+//		FastBitmap result = otms.objectFromSemantic(resource.get("fb3"), FastBitmap.class);
+//		JOptionPane.showMessageDialog(null, result.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
 	}
 	
 	@Test

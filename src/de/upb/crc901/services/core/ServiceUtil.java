@@ -37,7 +37,7 @@ public class ServiceUtil {
 		return getOperationInvocation(serviceCall, getObjectInputMap(inputs));
 	}
 
-	public static OperationInvocation getOperationInvocation(String serviceCall, Map<String, Object> inputs) {
+	public static OperationInvocation getOperationInvocation(String serviceCall, Map<String, ? extends Object> inputs) {
 
 		/* first create operation */
 		CompositionDomain emptyDomain = new CompositionDomain();

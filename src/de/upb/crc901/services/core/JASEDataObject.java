@@ -54,9 +54,8 @@ public class JASEDataObject {
 		return true;
 	}
 
-	public static JASEDataObject FROM_JSON(JsonNode json) {
-		// TODO Auto-generated method stub
-		return null;
+	public String toString() {
+		return type + ": " + object.toString();
 	}
 	
 

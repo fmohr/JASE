@@ -51,7 +51,7 @@ public class MultiServerComp {
 		File imageFile = new File("testrsc/2k.jpg");
 		FastBitmap fb = new FastBitmap(imageFile.getAbsolutePath());
 		ServiceCompositionResult resource = client.invokeServiceComposition(composition, fb);
-		FastBitmap result = otms.jsonToObject(resource.get("fb3"), FastBitmap.class);
+//		FastBitmap result = otms.jsonToObject(resource.get("fb3"), FastBitmap.class);
 //		JOptionPane.showMessageDialog(null, fb.toIcon(), "Before", JOptionPane.PLAIN_MESSAGE);
 //		JOptionPane.showMessageDialog(null, result.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
 	

@@ -24,6 +24,7 @@
 package de.upb.crc901.services.core;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -85,61 +86,13 @@ public class HttpServiceServer {
 //	private final Set<String> supportedOperations = new HashSet<>();
 //	private final Map<String, Map<String, String>> resultMaps = new HashMap<>();
 
-	class ServiceHandle {
-		private final String id;
-		private final Object service;
-
-		/**
-		 * Standard constructor
-		 * @param id Id which the service can be accessed through
-		 * @param service inner service
-		 */
-		ServiceHandle(String id, Object service) {
-			super();
-			this.id = id;
-			this.service = service;
-		}
-		
-		/**
-		 * Constructor which is used to indicate that the serialization has failed.
-		 * @param service inner service
-		 */
-		ServiceHandle(Object service) {
-			super();
-			this.id = null;
-			this.service = service; 
-		}
-		
-		/**
-		 * If id is set to null, the service couldn't be serialized (see the invokeOperation method)
-		 * This the server shouldn't return this servicehandle to the client. (see 
-		 * 
-		 * @return True if the inner service was serialized to disk.
-		 */
-		public boolean wasSerialized() {
-			return id!=null;
-		}
-
-		/**
-		 * Returns the id of the service. Throws Runtime-Exception if wasSerialized() returns false.
-		 */
-		public String getId() {
-			if(wasSerialized()) {
-				return id;
-			}
-			else {
-				// this service wasn't serialized. so the id shouldn't be accessed.
-				throw new RuntimeException("The service wasn't serialized. Can't access the id.");
-			}
-		}
-	}
-
 	class JavaClassHandler implements HttpHandler {
 
 		@Override
 		public void handle(HttpExchange t) throws IOException {
 
 			String response = "";
+			HttpBody returnBody = null;
 			try {
 
 				/* determine method to be executed */
@@ -150,7 +103,7 @@ public class HttpServiceServer {
 				if ((!"post".equalsIgnoreCase(t.getRequestMethod()))) {
 					throw new UnsupportedEncodingException("No post request");
 				}
-				InputStream input =  t.getRequestBody();//new InputStreamReader(t.getRequestBody(), "utf-8");
+				InputStream input =  t.getRequestBody();
 				
 				HttpBody body = new HttpBody();
 				body.readfromBody(input);
@@ -179,8 +132,8 @@ public class HttpServiceServer {
 					throw new RuntimeException(response);
 				}
 
-				Map<String, Object> initialState = null; // body.getKeyworkArgs();
-				Map<String, Object> state = new HashMap<>(initialState);
+				Map<String, JASEDataObject> initialState = new HashMap<>(body.getKeyworkArgs());
+				Map<String, JASEDataObject> state = new HashMap<>(initialState);
 				logger.info("Input keys are: {}", initialState.keySet());
 
 				/*
@@ -260,38 +213,32 @@ public class HttpServiceServer {
 				/* now returning the serializations of all created (non-service) objects */
 				logger.info("Returning answer to sender");
 				ObjectNode objectsToReturn = new ObjectMapper().createObjectNode();
+				returnBody = new HttpBody();
 				for (String key : state.keySet()) {
 					Object answerObject = state.get(key);
-					if (!initialState.containsKey(key)) {
-						if (answerObject == null)
-							objectsToReturn.putNull(key);
-						else if ((answerObject instanceof ObjectNode))
-							objectsToReturn.set(key, (JsonNode) answerObject);
-						else if (answerObject instanceof String)
-							objectsToReturn.put(key, (String) answerObject);
-						else if (answerObject instanceof Double)
-							objectsToReturn.put(key, (Double) answerObject);
-						else if (answerObject instanceof Integer)
-							objectsToReturn.put(key, (Integer) answerObject);
-						else if (answerObject instanceof ServiceHandle) {
-							ServiceHandle handle = (ServiceHandle) answerObject;
-							if(handle.wasSerialized()) {
-								// Return the handle only if the service was serialized and can be accessed.
-								objectsToReturn.put(key, t.getLocalAddress().toString().substring(1) + "/" + clazz + "/" + handle.getId());
-							}
-						}else
-							throw new IllegalArgumentException("Do not know how to treat object " + answerObject + " as it is not serialized to some json thing");
+					if(answerObject instanceof JASEDataObject) {
+						returnBody.addKeyworkArgument(key, (JASEDataObject) answerObject);
+					}else {
+						JASEDataObject jdo = otms.objectToSemantic(answerObject);
+						returnBody.addUnparsedKeywordArgument(otms, key, jdo);
 					}
 				}
-				response += objectsToReturn.toString();
 			} catch (InvocationTargetException e) {
 				e.getTargetException().printStackTrace();
 			} catch (Throwable e) {
 				e.printStackTrace();
 			} finally {
 				t.sendResponseHeaders(200, response.length());
+				
 				OutputStream os = t.getResponseBody();
-				os.write(response.getBytes());
+				ByteArrayOutputStream arrayOutputStream = new ByteArrayOutputStream();
+				if(returnBody!=null) {
+					returnBody.writeBody(arrayOutputStream);
+					os.write(arrayOutputStream.toByteArray());
+					os.flush();
+				}else {
+					os.write(response.getBytes());
+				}
 				os.close();
 			}
 
@@ -313,7 +260,7 @@ public class HttpServiceServer {
 		}
 	}
 
-	private void invokeOperation(OperationInvocation operationInvocation, Map<String, Object> state) throws IllegalAccessException, IllegalArgumentException,
+	private void invokeOperation(OperationInvocation operationInvocation, Map<String, JASEDataObject> state) throws IllegalAccessException, IllegalArgumentException,
 			InvocationTargetException, NoSuchMethodException, SecurityException, ClassNotFoundException, InstantiationException {
 		logger.info("Performing invocation {} in state {}", operationInvocation, state.keySet());
 		List<VariableParam> inputs = operationInvocation.getOperation().getInputParameters();
@@ -338,19 +285,21 @@ public class HttpServiceServer {
 
 			/* if the value is a variable in our current state, use this */
 			else if (state.containsKey(val)) {
-				JsonNode var = (JsonNode) state.get(val);
-				if (var.isNumber()) {
-					if (var.asText().contains(".")) {
-						values[j] = var.asDouble();
+				
+				Object var =  state.get(val).getData();
+				if (var instanceof Number) {
+					if (var instanceof Double) {
+						types[j]  = Double.TYPE.getName();
+						values[j] = (Double) var;
 					} else {
 						types[j] = Integer.TYPE.getName();
-						values[j] = var.asInt();
+						values[j] = (Integer) var;
 					}
-				} else if (var.isTextual()) {
+				} else if (var instanceof String) {
 					types[j] = String.class.getName();
-					values[j] = var.asText();
+					values[j] = (String) var;
 				} else {
-					types[j] = var.get("type").asText();
+					types[j] = state.get(val).getType();
 					values[j] = var;
 				}
 			} else {
@@ -428,10 +377,10 @@ public class HttpServiceServer {
 				if(!serializationSuccess) {
 					// serialization wasn't successful.
 					/* reset the ServiceHandle with id = null to indicate that this service wasn't serialized successfully. */
-					sh = new ServiceHandle(sh.service);
+					sh = new ServiceHandle(sh.getService());
 				}
 				// Put the handler into the state.
-				state.put(outputMapping.values().iterator().next().getName(), sh);
+				state.put(outputMapping.values().iterator().next().getName(), new JASEDataObject(ServiceHandle.class.getSimpleName(), sh));
 				return;
 			}
 
@@ -474,7 +423,12 @@ public class HttpServiceServer {
 								// System.out.print(values[i] + " -> ");
 								// System.out.println(otms.jsonToObject((JsonNode) values[i], requiredTypes[i]));
 							}
-							values[i] = otms.jsonToObject((JsonNode) values[i], requiredTypes[i]);
+							if(requiredTypes[i].getSimpleName().equals(types[i])) {
+								// no conversion needed. given Semantic type is equal to the required type.
+							}
+							else {
+								values[i] = otms.objectFromSemantic(new JASEDataObject(types[i], values[i]), (Class<?>) requiredTypes[i]);						
+							}
 						}
 					}
 					try {
@@ -508,7 +462,7 @@ public class HttpServiceServer {
 			methodName = parts[1];
 			
 			if (object instanceof ServiceHandle) {
-				object = ((ServiceHandle) object).service;
+				object = ((ServiceHandle) object).getService();
 			}
 			clazz = object.getClass().getName();
 			
@@ -531,7 +485,12 @@ public class HttpServiceServer {
 			Class<?>[] requiredTypes = method.getParameterTypes();
 			for (int i = 0; i < requiredTypes.length; i++) {
 				if (!requiredTypes[i].isPrimitive() && !requiredTypes[i].getName().equals("String")) {
-					values[i] = otms.jsonToObject((JsonNode) values[i], requiredTypes[i]);
+					if(requiredTypes[i].getSimpleName().equals(types[i])) {
+						// no conversion needed. given Semantic type is equal to the required type.
+					}
+					else {
+						values[i] = otms.objectFromSemantic(new JASEDataObject(types[i], values[i]), (Class<?>) requiredTypes[i]);						
+					}
 				}
 			}
 
@@ -566,13 +525,13 @@ public class HttpServiceServer {
 						+ "Declared output params are: " + operationInvocation.getOperation().getOutputParameters());
 			String nameOfStateVariableToStoreResultIn = targetParam.getName();
 			Object processedResult = result.get(key);
-			Object objectToStore = null;
+			JASEDataObject objectToStore = null;
 			if(processedResult != null) {
 				 if(processedResult instanceof Number || processedResult instanceof String) {
-					objectToStore = processedResult;
+					objectToStore = new JASEDataObject(HttpBody.PRIMITIVE_TYPE, processedResult);
 				 }
 				 else {	
-					 objectToStore = otms.objectToJson(processedResult); //  TODO do we really need to translate to json again?
+					 objectToStore = otms.objectToSemantic(processedResult); //  TODO do we really need to translate to json again?
 				 }
 			}
 			state.put(nameOfStateVariableToStoreResultIn,

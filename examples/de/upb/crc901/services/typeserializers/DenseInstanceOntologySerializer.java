@@ -28,7 +28,8 @@ public class DenseInstanceOntologySerializer implements IOntologySerializer<Dens
 			return inst;
 		}
 		else {
-			throw new RuntimeException("Type mismatch!");
+			typeMismatch(jdo);
+			return null;
 		}
 	}
 

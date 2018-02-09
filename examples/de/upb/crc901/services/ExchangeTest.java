@@ -57,11 +57,13 @@ public class ExchangeTest {
 		body.setComposition("something");
 		body.setCurrentIndex(2);
 		body.addKeyworkArgument("a", new JASEDataObject("Instances", instances));
+		body.addUnparsedKeywordArgument(null, "i1",1);
 		body.addPositionalArgument(new JASEDataObject("LabeledInstances", linstances));
+		
 		body.writeBody(System.out);
 		
 		
-        String bodyString = "{\"currentindex\":2,\"maxindex\":-1,\"inputs\":{\"$arg_list$\":[{\"type\":\"LabeledInstances\",\"data\":{\"instances\":[[0.0,1.0,2.0],[20.0,21.0,22.0]],\"labels\":[\"label0\",\"label1\"]}}],\"a\":{\"type\":\"Instances\",\"data\":[[0.0,1.0,2.0],[20.0,21.0,22.0]]}},\"choreography\":\"something\"}";
+        String bodyString = "{\"currentindex\":2,\"maxindex\":-1,\"inputs\":{\"$arg_list$\":[{\"type\":\"LabeledInstances\",\"data\":{\"instances\":[[0.0,1.0,2.0],[20.0,21.0,22.0]],\"labels\":[\"label0\",\"label1\"]}}],\"a\":{\"type\":\"Instances\",\"data\":[[0.0,1.0,2.0],[20.0,21.0,22.0]]},\"i1\":{\"type\":\"primitive\",\"data\":1}},\"choreography\":\"something\"}";
 		InputStream in  = new ByteArrayInputStream(bodyString.getBytes());
         HttpBody body2 = new HttpBody();
 		body2.readfromBody(in);

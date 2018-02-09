@@ -22,6 +22,7 @@
 package de.upb.crc901.services.core;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -118,13 +119,14 @@ public class HttpServiceClient {
 		/* send data */
 		OutputStream out = con.getOutputStream();
 		body.writeBody(out);
-		out.flush();
+		body.writeBody(System.out);
 		out.close();
 
 		/* read and return answer */
-		StringBuilder content = new StringBuilder();
-		try (InputStream in = con.getInputStream()){
+		HttpBody returnedBody = new HttpBody();
 		
+		try (InputStream in = con.getInputStream()){
+			StringBuilder content = new StringBuilder();
 			BufferedReader br = new BufferedReader(new InputStreamReader(in));
 			String curline;
 			while ((curline = br.readLine()) != null) {
@@ -132,33 +134,18 @@ public class HttpServiceClient {
 			}
 			br.close();
 			con.disconnect();
-		} catch(IOException serverError) {
-			try (InputStream in = con.getErrorStream()){
-				
-				BufferedReader br = new BufferedReader(new InputStreamReader(in));
-				String curline;
-				while ((curline = br.readLine()) != null) {
-					content.append(curline + '\n');
-				}
-				br.close();
-				con.disconnect();
-				System.out.println("");
-			} catch(IOException anotherError) {
-				anotherError.printStackTrace();
-			}
-			throw new RuntimeException("Server returned error code " + con.getResponseCode() + ". Message: \n" + content.toString());
+			ByteArrayInputStream arrIn = new ByteArrayInputStream(content.toString().getBytes());
+			
+			returnedBody.readfromBody(arrIn);
+			
+		}catch(IOException ex) {
+			ex.printStackTrace();
 		}
-		JsonNode root = new ObjectMapper().readTree(content.toString());
-		if(root == null) {
-			throw new RuntimeException("Error occured parsing " + content.toString());
+		catch(Exception ex) {
+			ex.printStackTrace();
 		}
 		ServiceCompositionResult result = new ServiceCompositionResult();
-		Iterator<String> it = root.fieldNames();
-		while (it.hasNext()) {
-			String field = it.next();
-			JsonNode object = root.get(field);
-			result.put(field, object);
-		}
+		result.addBody(returnedBody);
 		return result;
 	}
 

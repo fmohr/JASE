@@ -82,22 +82,22 @@ public class DeployTests {
 	public void test_preproPase_classifyPase() throws FileNotFoundException, IOException {
 		List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .1f, .8f);
 		ServiceCompositionResult result = executeComposition("testrsc/deployPase.txt", split.get(0), split.get(1), split.get(2));
-		System.out.println("Prediction accuracy Scikit RandomForestClassifier: " + result.get("Accuracy").asText());
+		System.out.println("Prediction accuracy Scikit RandomForestClassifier: " + result.get("Accuracy").getData());
 	}
 	
 	@Test
 	public void test_preproPase_classifyJase() throws FileNotFoundException, IOException {
 		List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .1f, .8f);
 		ServiceCompositionResult result = executeComposition("testrsc/deployJase.txt", split.get(0), split.get(1), split.get(2));
-		System.out.println("Prediction accuracy Weka RandomForest: " + result.get("Accuracy").asText());
+		System.out.println("Prediction accuracy Weka RandomForest: " + result.get("Accuracy").getData());
 	}
 	
 	@Test
 	public void test_nn_tensorflow() throws IOException {
 		List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .8f, .14f, 0.05f);
 		ServiceCompositionResult result = executeComposition("testrsc/nn_tf.txt", split.get(0), split.get(1), split.get(2));
-		System.out.println("Prediction accuracy MLP TF: " + result.get("Accuracy").asText());
-		List<Double> predictions = new ObjectMapper().readValue(result.get("Predictions").get("data").traverse(), new TypeReference<ArrayList<String>>(){});
+		System.out.println("Prediction accuracy MLP TF: " + result.get("Accuracy").getData());
+		List<Double> predictions = (List<Double>) result.get("Predictions").getData();
 		//System.out.println("Predictions by NN TF: " + predictions);
 		
 	}
@@ -106,8 +106,8 @@ public class DeployTests {
 	public void test_nn_weka() throws IOException {
 		List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .8f, .14f, 0.05f);
 		ServiceCompositionResult result = executeComposition("testrsc/nn_weka.txt", split.get(0), split.get(1), split.get(2));
-		System.out.println("Prediction accuracy MLP Weka: " + result.get("Accuracy").asText());
-		List<Double> predictions = new ObjectMapper().readValue(result.get("Predictions").get("data").traverse(), new TypeReference<ArrayList<String>>(){});
+		System.out.println("Prediction accuracy MLP Weka: " + result.get("Accuracy").getData());
+		List<Double> predictions = (List<Double>) result.get("Predictions").getData();
 		//System.out.println("Predictions by NN TF: " + predictions);
 	}
 	
@@ -115,7 +115,7 @@ public class DeployTests {
 	public void test_nn_scikit() throws IOException {
 		List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .1f, .7f, 0.2f);
 		ServiceCompositionResult result = executeComposition("testrsc/nn_sk.txt", split.get(0), split.get(1), split.get(2));
-		System.out.println("Prediction accuracy MLP SK: " + result.get("Accuracy").asText());
+		System.out.println("Prediction accuracy MLP SK: " + result.get("Accuracy").getData());
 	}
 	
 	
