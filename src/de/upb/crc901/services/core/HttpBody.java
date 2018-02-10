@@ -19,6 +19,7 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import de.upb.crc901.configurationsetting.operation.OperationInvocation;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
@@ -205,13 +206,6 @@ public final class HttpBody {
 	 * @param outStream the output stream 
 	 * @param otms The marshaling system used to parse the arguments objects to semantic objects
 	 * @throws IOException 
-	 * @throws SecurityException 
-	 * @throws NoSuchMethodException 
-	 * @throws InstantiationException 
-	 * @throws ClassNotFoundException 
-	 * @throws InvocationTargetException 
-	 * @throws IllegalArgumentException 
-	 * @throws IllegalAccessException 
 	 */
 	private void writeBodyAsJson(OutputStream outStream) throws IOException {
 		JsonFactory jfactory = new JsonFactory();
@@ -252,15 +246,16 @@ public final class HttpBody {
 	}
 	
 	private void writeObject(JsonGenerator jsonOut, JASEDataObject jdo) throws IOException {
+
+		jsonOut.writeStartObject();
+		jsonOut.writeStringField("type", jdo.getType());
+		jsonOut.writeFieldName("data");
 		if(isPrimitive(jdo)) {
-			jsonOut.writeStartObject();
-			jsonOut.writeStringField("type", jdo.getType());
-			jsonOut.writeFieldName("data");
 			jsonOut.writeObject(jdo.getData());
-			jsonOut.writeEndObject();
 		}else {
 			parseObjectAndWrite(jsonOut, jdo);
 		}
+		jsonOut.writeEndObject();
 	}
 	
 	private void  parseObjectAndWrite(JsonGenerator jsonOut, JASEDataObject jdo) throws IOException {
@@ -276,20 +271,19 @@ public final class HttpBody {
 			handler = (StreamHandler<?>) streamHandlerClass.getConstructor().newInstance();
 		} catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException
 				| NoSuchMethodException | SecurityException e) {
+			e.printStackTrace();
 			throw new RuntimeException(e); // mask exception
 		}
 		
 		Method write = MethodUtils.getMatchingAccessibleMethod(streamHandlerClass, "write", JsonGenerator.class, handler.getSupportedSemanticClass());
 		assert write != null : "Could not find method \"write(" + JsonGenerator.class + ", " + handler.getSupportedSemanticClass() + ")\" in streamhandler class " + streamHandlerClassName;
-		jsonOut.writeStartObject();
-		jsonOut.writeStringField("type", jdo.getType());
-		jsonOut.writeFieldName("data");
+		
 		try {
 			write.invoke(handler, jsonOut, jdo.getData());
 		} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+			e.printStackTrace();
 			throw new RuntimeException(e);
 		}
-		jsonOut.writeEndObject();
 	}
 
 	/**
@@ -331,6 +325,7 @@ public final class HttpBody {
 	
 	public void readfromJsonBody(InputStream input) throws IOException {
 		JsonFactory jfactory = new JsonFactory();
+//		jfactory.setCodec(new ObjectMapper());
 		JsonParser jsonIn = jfactory.createParser(input);
 		while (jsonIn.nextToken() != JsonToken.END_OBJECT) {
 			 String fieldname = jsonIn.getCurrentName();

@@ -38,6 +38,8 @@ public class InstanceStreamHandler implements StreamHandler<Instance> {
 			JsonToken token = jsonIn.currentToken();
 			if(token.isNumeric()) {
 				instance.add(jsonIn.getNumberValue().doubleValue());
+			}else if("NaN".equals(jsonIn.getValueAsString())){
+				instance.add(Double.NaN);
 			}
 			else {
 				throw new IOException("Type mismatch: " + token.asString() + " isn't numeric.");
@@ -50,7 +52,11 @@ public class InstanceStreamHandler implements StreamHandler<Instance> {
 		Instance instance = (Instance) data;
 		jsonOut.writeStartArray();
 		for(Double value : instance) {
-			jsonOut.writeNumber(value);
+			if(Double.NaN == value) {
+				jsonOut.writeString("NaN");
+			} else {
+				jsonOut.writeNumber(value);
+			}
 		}
 		jsonOut.writeEndArray();
 	}

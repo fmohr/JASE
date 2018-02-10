@@ -21,27 +21,18 @@
  */
 package de.upb.crc901.services.core;
 
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLEncoder;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.math.NumberUtils;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import de.upb.crc901.configurationsetting.compositiondomain.CompositionDomain;
 import de.upb.crc901.configurationsetting.logic.LiteralParam;
@@ -113,31 +104,21 @@ public class HttpServiceClient {
 			url = new URL("http://" + host + "/" + "choreography");
 		}
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
+
+		con.setChunkedStreamingMode(0);
+		con.setDoOutput(false);
 		con.setRequestMethod("POST");
 		con.setDoOutput(true);
 		
 		/* send data */
 		OutputStream out = con.getOutputStream();
 		body.writeBody(out);
-		body.writeBody(System.out);
 		out.close();
 
-		/* read and return answer */
 		HttpBody returnedBody = new HttpBody();
-		
+		/* read and return answer */
 		try (InputStream in = con.getInputStream()){
-			StringBuilder content = new StringBuilder();
-			BufferedReader br = new BufferedReader(new InputStreamReader(in));
-			String curline;
-			while ((curline = br.readLine()) != null) {
-				content.append(curline + '\n');
-			}
-			br.close();
-			con.disconnect();
-			ByteArrayInputStream arrIn = new ByteArrayInputStream(content.toString().getBytes());
-			
-			returnedBody.readfromBody(arrIn);
-			
+			returnedBody.readfromBody(in);
 		}catch(IOException ex) {
 			ex.printStackTrace();
 		}
@@ -145,7 +126,7 @@ public class HttpServiceClient {
 			ex.printStackTrace();
 		}
 		ServiceCompositionResult result = new ServiceCompositionResult();
-		result.addBody(returnedBody);
+		result.addBody(returnedBody, host);
 		return result;
 	}
 

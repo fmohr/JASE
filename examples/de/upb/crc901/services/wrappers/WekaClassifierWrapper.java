@@ -199,7 +199,7 @@ public class WekaClassifierWrapper extends ServiceWrapper{
 	/**
 	 * Takes Instances and returns a list of predictions made by the inner classifier.
 	 */
-	public List<String> predict(jaicore.ml.interfaces.Instances instances) {
+	public List<String> predict(SimpleInstancesImpl instances) {
 		return predictInstanceIterable(
 				instances, 
 				instances.getNumberOfRows(), 

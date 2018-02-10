@@ -28,18 +28,35 @@ import com.fasterxml.jackson.databind.JsonNode;
 @SuppressWarnings("serial")
 public class ServiceCompositionResult extends HashMap<String, JASEDataObject> {
 
-	public void addBody(HttpBody returnedBody) {
+	public void addBody(HttpBody returnedBody, String host) {
 		for(String keyword : returnedBody.getKeyworkArgs().keySet()) {
-			super.put(keyword, returnedBody.getKeyworkArgs().get(keyword));
+			JASEDataObject jdo = returnedBody.getKeyworkArgs().get(keyword);
+			jdo = rewriteHosts(jdo, host);
+			super.put(keyword, jdo);
 		}
 		int index = 1;
 		for(JASEDataObject jdo :  returnedBody.getPositionalArgs()) {
+			jdo = rewriteHosts(jdo, host);
 			super.put("i" + index, jdo);
 			index++;
 		}
 
 	}
-	
+	/**
+	 * Rewrite the 'host' attribute for all servicehandlers whose host was "local".
+	 * 
+	 */
+	private JASEDataObject rewriteHosts(JASEDataObject jdo , String host) {
+		if(jdo.getData() instanceof ServiceHandle && !((ServiceHandle)jdo.getData()).isRemote()) {
+			// rewrite host attribute
+			ServiceHandle translatedHandler = ((ServiceHandle)jdo.getData()).withExternalHost(host);
+			jdo = new JASEDataObject(jdo.getType(), translatedHandler);
+			return jdo;
+		}
+		else {
+			return jdo;
+		}
+	}
 	
 
 }

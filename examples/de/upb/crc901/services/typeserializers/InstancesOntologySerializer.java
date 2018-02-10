@@ -33,9 +33,9 @@ public class InstancesOntologySerializer implements IOntologySerializer<Instance
 
 	public JASEDataObject serialize(final Instances instances) {
 		if (instances.classIndex() < 0)
-			return new JASEDataObject("Instances", WekaUtil.toJAICoreInstances(instances).toJson());
+			return new JASEDataObject("Instances", WekaUtil.toJAICoreInstances(instances));
 		else
-			return new JASEDataObject("LabeledInstances", WekaUtil.toJAICoreLabeledInstances(instances).toJson());
+			return new JASEDataObject("LabeledInstances", WekaUtil.toJAICoreLabeledInstances(instances));
 	}
 
 	@Override

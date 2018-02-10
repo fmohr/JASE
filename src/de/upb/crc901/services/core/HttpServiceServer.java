@@ -215,27 +215,30 @@ public class HttpServiceServer {
 				ObjectNode objectsToReturn = new ObjectMapper().createObjectNode();
 				returnBody = new HttpBody();
 				for (String key : state.keySet()) {
-					Object answerObject = state.get(key);
-					if(answerObject instanceof JASEDataObject) {
-						returnBody.addKeyworkArgument(key, (JASEDataObject) answerObject);
-					}else {
-						JASEDataObject jdo = otms.objectToSemantic(answerObject);
-						returnBody.addUnparsedKeywordArgument(otms, key, jdo);
+					if(initialState.containsKey(key)) {
+						continue;// dont send the same data again.
 					}
+					JASEDataObject answerObject = state.get(key);
+					if(answerObject == null) {
+						continue;
+					}
+					if(answerObject.getData() instanceof ServiceHandle && 
+							!((ServiceHandle)answerObject.getData()).isSerialized()) {
+						// not serialized. dont send this to client.
+						continue;
+					}
+					returnBody.addKeyworkArgument(key, (JASEDataObject) answerObject);
 				}
 			} catch (InvocationTargetException e) {
 				e.getTargetException().printStackTrace();
 			} catch (Throwable e) {
 				e.printStackTrace();
 			} finally {
-				t.sendResponseHeaders(200, response.length());
-				
+				t.sendResponseHeaders(200, 0);
 				OutputStream os = t.getResponseBody();
-				ByteArrayOutputStream arrayOutputStream = new ByteArrayOutputStream();
 				if(returnBody!=null) {
-					returnBody.writeBody(arrayOutputStream);
-					os.write(arrayOutputStream.toByteArray());
-					os.flush();
+					returnBody.writeBody(os);
+//					os.flush();
 				}else {
 					os.write(response.getBytes());
 				}
@@ -357,13 +360,14 @@ public class HttpServiceServer {
 				String id = UUID.randomUUID().toString();
 				ServiceHandle sh;
 				if(!wrapped) {
-					sh  = new ServiceHandle(id, newService);
+					sh  = new ServiceHandle(clazz, id, newService);
 				}
 				else {
-					sh = new ServiceHandle(id, wrapper);
+					sh = new ServiceHandle(clazz, id, wrapper);
 				}
 				boolean serializationSuccess = false; // be pessimistic about result. Set to true if it worked.
 				// if wrapped and wrappers'delegate can be serialized or it wasn't wrapped and the service itself can be serialized.
+				String varname = outputMapping.values().iterator().next().getName();
 				if (newService instanceof Serializable) {  
 					/* serialize result */
 					try {
@@ -376,11 +380,13 @@ public class HttpServiceServer {
 				}
 				if(!serializationSuccess) {
 					// serialization wasn't successful.
-					/* reset the ServiceHandle with id = null to indicate that this service wasn't serialized successfully. */
-					sh = new ServiceHandle(sh.getService());
+					sh = sh.unsuccessedSerialize();
+					sh = sh.unsuccessedSerialize();
+					state.put(varname, new JASEDataObject(ServiceHandle.class.getSimpleName(), sh));
+				}else {
+					// Put the handler into the state.
+					state.put(varname, new JASEDataObject(ServiceHandle.class.getSimpleName(), sh));
 				}
-				// Put the handler into the state.
-				state.put(outputMapping.values().iterator().next().getName(), new JASEDataObject(ServiceHandle.class.getSimpleName(), sh));
 				return;
 			}
 
@@ -458,7 +464,7 @@ public class HttpServiceServer {
 		} else { // if this is a call on a created services (this cannot be a constructor)
 			String[] parts = opName.split("::");
 			String objectId = parts[0];
-			Object object = state.get(objectId);
+			Object object = state.get(objectId).getData();
 			methodName = parts[1];
 			
 			if (object instanceof ServiceHandle) {

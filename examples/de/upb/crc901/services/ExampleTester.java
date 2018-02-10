@@ -100,19 +100,20 @@ public class ExampleTester {
 		/* create and train classifier service */
 		String className = RandomTree.class.getName();
 		
-		String serviceId = ((ServiceHandle) client.callServiceOperation("127.0.0.1:" + PORT + "/" + className + "::__construct").get("out").getData()).getId();
-		client.callServiceOperation(serviceId + "::train", split.get(0));
+		ServiceHandle service = ((ServiceHandle) client.callServiceOperation("localhost:" + PORT + "/" + className + "::__construct").get("out").getData());
+		String serviceAddress = service.getServiceAddress();
+		client.callServiceOperation(serviceAddress + "::train", split.get(0));
 
 		/* eval instances on service */
 		int mistakes = 0;
 		for (Instance i : split.get(1)) {
-			ServiceCompositionResult resource = client.callServiceOperation(serviceId + "::classifyInstance", i);
-			double prediction = Double.parseDouble(resource.get("out").toString());
+			ServiceCompositionResult resource = client.callServiceOperation(serviceAddress + "::classifyInstance", i);
+			double prediction =  (double) resource.get("out").getData();
 			if (prediction != i.classValue())
 				mistakes++;
 		}
 		
-		ServiceCompositionResult result =  client.callServiceOperation(serviceId + "::predict", split.get(1));
+		ServiceCompositionResult result =  client.callServiceOperation(serviceAddress + "::predict", split.get(1));
 		List<String> predictions = (List<String>) result.get("out").getData();
 		
 		for(String predictedLabel : predictions) {
@@ -121,7 +122,7 @@ public class ExampleTester {
 		}
 		
 
-		result =  client.callServiceOperation(serviceId + "::predict_and_score", split.get(1));
+		result =  client.callServiceOperation(serviceAddress + "::predict_and_score", split.get(1));
 		Double score = (Double) result.get("out").getData();
 		
 		
@@ -137,7 +138,7 @@ public class ExampleTester {
 		
 	}
 
-	//@Test
+	@Test
 	public void testImageProcessor() throws Exception {
 
 		/* create new classifier */
@@ -147,8 +148,8 @@ public class ExampleTester {
 		FastBitmap fb = new FastBitmap(imageFile.getAbsolutePath());
 		JOptionPane.showMessageDialog(null, fb.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
 		ServiceCompositionResult resource = client.invokeServiceComposition(composition, fb);
-//		FastBitmap result = otms.objectFromSemantic(resource.get("fb3"), FastBitmap.class);
-//		JOptionPane.showMessageDialog(null, result.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
+		FastBitmap result = otms.objectFromSemantic(resource.get("fb3"), FastBitmap.class);
+		JOptionPane.showMessageDialog(null, result.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
 	}
 	
 	@Test
