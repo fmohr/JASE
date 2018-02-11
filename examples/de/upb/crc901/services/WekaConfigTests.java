@@ -44,7 +44,7 @@ public class WekaConfigTests {
 	
 	// names of base classes in the configuration
 	private static String baseClassifierConfigName = "$base_weka_classifier_config$";
-	private static String basePreprocessorConfigName = "$base_weka_preprocessor_config$";
+	private static String basePreprocessorConfigName = "$base_weka_filter_config$";
 	
 	
 	@BeforeClass
@@ -66,9 +66,9 @@ public class WekaConfigTests {
 		for(String wekaClassifier : server.getClassesConfig().allSubconfigs(baseClassifierConfigName)) {
 			System.out.println("\t" + wekaClassifier);
 		}
-		System.out.println("WEKA PREPROCESSORS:");
-		for(String wekaClassifier : server.getClassesConfig().allSubconfigs(basePreprocessorConfigName)) {
-			System.out.println("\t" + wekaClassifier);
+		System.out.println("WEKA FILTERS:");
+		for(String wekaPreprocessor : server.getClassesConfig().allSubconfigs(basePreprocessorConfigName)) {
+			System.out.println("\t" + wekaPreprocessor);
 		}
 	}
 
@@ -77,7 +77,7 @@ public class WekaConfigTests {
 		server.shutdown();
 	}
 	
-	@Test
+//	@Test
 	/**
 	 * Iterates over all classifiers in the config and tries to train and evaluate them.
 	 */
@@ -88,21 +88,44 @@ public class WekaConfigTests {
 		for(String wekaClassifierClasspath : server.getClassesConfig().allSubconfigs(baseClassifierConfigName)) {
 			try {
 				// Create classifier service
-				String serviceId = ((ServiceHandle)client.callServiceOperation(
+				ServiceHandle service = (ServiceHandle) client.callServiceOperation(
 							"localhost:" + PORT + "/" + wekaClassifierClasspath + "::__construct")
-								.get("out").getData()).getId();
-				Assert.assertNotNull(serviceId);
+								.get("out").getData();
+				Assert.assertNotNull(service.getServiceAddress());
 				// train the classifier
-				client.callServiceOperation(serviceId + "::train", split.get(0));
+				client.callServiceOperation(service.getServiceAddress() + "::train", split.get(0));
 				// evaluate the classifier
-				ServiceCompositionResult result =  client.callServiceOperation(serviceId + "::predict_and_score", split.get(1));
+				ServiceCompositionResult result =  client.callServiceOperation(service.getServiceAddress() + "::predict_and_score", split.get(1));
 				Double score = (Double) result.get("out").getData();
 				
 				System.out.println("Accuracy of " + wekaClassifierClasspath + ": " + score);
 			} catch (Exception ex) {
+				ex.printStackTrace();
 				errorSet.add(wekaClassifierClasspath);
 			}
 		}
 		System.out.println("Error occurred with these classifiers:\n" + errorSet);
+	}
+	@Test
+	public void testAllPreprocessors() throws IOException {
+		Set<String> errorSet = new HashSet<>();
+		for(String wekaPreprocessor : server.getClassesConfig().allSubconfigs(basePreprocessorConfigName)) {
+			try {
+				// Create preprocessor service
+				ServiceHandle service = (ServiceHandle) client.callServiceOperation(
+							"localhost:" + PORT + "/" + wekaPreprocessor + "::__construct")
+								.get("out").getData();
+				Assert.assertNotNull(service.getServiceAddress());
+				// preprocess data
+				ServiceCompositionResult result = client.callServiceOperation(service.getServiceAddress() + "::preprocess", wekaInstances);
+				if(!result.containsKey("out") || result.get("out") == null) {
+					errorSet.add(wekaPreprocessor);
+				}
+			} catch (Exception ex) {
+				ex.printStackTrace();
+				errorSet.add(wekaPreprocessor);
+			}
+		}
+		System.out.println("Error occurred with these preprocessors:\n" + errorSet);
 	}
 }

@@ -328,6 +328,10 @@ public final class HttpBody {
 //		jfactory.setCodec(new ObjectMapper());
 		JsonParser jsonIn = jfactory.createParser(input);
 		while (jsonIn.nextToken() != JsonToken.END_OBJECT) {
+			if(jsonIn.currentToken() == null) {
+				// end stream:
+				break;
+			}
 			 String fieldname = jsonIn.getCurrentName();
 			 if(HttpBody.CHOREOGRAPGY_FIELDNAME.equals(fieldname)) {
 				 jsonIn.nextToken();

@@ -238,9 +238,9 @@ public class HttpServiceServer {
 				OutputStream os = t.getResponseBody();
 				if(returnBody!=null) {
 					returnBody.writeBody(os);
-//					os.flush();
 				}else {
 					os.write(response.getBytes());
+					os.flush();
 				}
 				os.close();
 			}
