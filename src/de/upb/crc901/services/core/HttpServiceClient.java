@@ -39,6 +39,7 @@ import de.upb.crc901.configurationsetting.logic.LiteralParam;
 import de.upb.crc901.configurationsetting.operation.OperationInvocation;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
 import de.upb.crc901.configurationsetting.serialization.SequentialCompositionSerializer;
+import de.upb.crc901.services.ExchangeTest;
 
 public class HttpServiceClient {
 
@@ -64,7 +65,6 @@ public class HttpServiceClient {
 	}
 
 	public ServiceCompositionResult callServiceOperation(OperationInvocation call, SequentialComposition coreography, Map<String, Object> additionalInputs) throws IOException {
-
 		/* separate service and operation from name */
 		String opFQName = call.getOperation().getName();
 		
@@ -94,9 +94,18 @@ public class HttpServiceClient {
 		body.setComposition(serializedCoreography);
 		body.setCurrentIndex(index);
 		for(String keyword: additionalInputs.keySet()) {
-			body.addUnparsedKeywordArgument(otms, keyword, additionalInputs.get(keyword));
+			Object input  = additionalInputs.get(keyword);
+			JASEDataObject parsedSemanticInput = null;
+			if(! (input instanceof JASEDataObject)) {
+				// first parse object
+				parsedSemanticInput = otms.objectToSemantic(input);
+			} else {
+				parsedSemanticInput = (JASEDataObject) input; // the given input is already semantic complient.
+			}
+			body.addKeyworkArgument(keyword, parsedSemanticInput);
 		}
 
+		ExchangeTest.STOP_TIME("Data parsed");
 		/* setup connection */
 		URL url = new URL("http://" + host + "/" + service + "/" + opName);
 		if(serializedCoreography != null) {
@@ -104,9 +113,7 @@ public class HttpServiceClient {
 			url = new URL("http://" + host + "/" + "choreography");
 		}
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
-
-		con.setChunkedStreamingMode(0);
-		con.setDoOutput(false);
+		con.setChunkedStreamingMode(100000);
 		con.setRequestMethod("POST");
 		con.setDoOutput(true);
 		
@@ -114,7 +121,7 @@ public class HttpServiceClient {
 		OutputStream out = con.getOutputStream();
 		body.writeBody(out);
 		out.close();
-
+		ExchangeTest.STOP_TIME("Sent data");
 		HttpBody returnedBody = new HttpBody();
 		/* read and return answer */
 		try (InputStream in = con.getInputStream()){

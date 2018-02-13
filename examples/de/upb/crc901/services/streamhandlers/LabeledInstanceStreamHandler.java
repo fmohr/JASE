@@ -27,7 +27,7 @@ public class LabeledInstanceStreamHandler implements StreamHandler<LabeledInstan
 		    String fieldname = jsonIn.getCurrentName();
 		    if ("attributes".equals(fieldname)) {
 		        jsonIn.nextToken();
-				delegateStreamHandler.read(jsonIn, labeledInstance);
+				delegateStreamHandler.readInto(jsonIn, labeledInstance);
 		    }
 		    if ("label".equals(fieldname)) {
 		    		jsonIn.nextToken();

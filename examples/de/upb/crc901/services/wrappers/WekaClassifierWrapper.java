@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
+import de.upb.crc901.services.ExchangeTest;
 import de.upb.crc901.services.core.ServiceWrapper;
 import jaicore.basic.MathExt;
 import jaicore.ml.core.SimpleInstancesImpl;
@@ -100,6 +101,7 @@ public class WekaClassifierWrapper extends ServiceWrapper{
 		 * which wasn't specified in previous declareClasses invocations.
 		 * If true the wekaInstaces object will be extended so is the inner classifier.
 		 */
+		ExchangeTest.STOP_TIME("declare classes started.");
 		boolean extendedClasses = false; 
 		for(LabeledInstance<String> labeledInstance : labeledInstances) {
 			if(!classLabelSet.contains(labeledInstance.getLabel())){
@@ -132,6 +134,7 @@ public class WekaClassifierWrapper extends ServiceWrapper{
 	    		
 	    }
 	    declaredClasses = true;
+		ExchangeTest.STOP_TIME("declare classes ended");
 	}
 	
 	
@@ -141,6 +144,8 @@ public class WekaClassifierWrapper extends ServiceWrapper{
 	 * @param labeledInstances training data
 	 */
 	public void train(LabeledInstances<String> trainingData) {
+
+		ExchangeTest.STOP_TIME("train started");
 		if(trainingData.getNumberOfRows() < 1) { // no data. do nothing.
 			return; // :(
 		}
@@ -160,6 +165,7 @@ public class WekaClassifierWrapper extends ServiceWrapper{
 			// Mask this excpetion
 			throw new RuntimeException(e);
 		}
+		ExchangeTest.STOP_TIME("train ended");
 	}
 	
 	/**
@@ -225,6 +231,7 @@ public class WekaClassifierWrapper extends ServiceWrapper{
         Otherwise, return the fraction of correctly classified samples.
 	 */
 	public double predict_and_score(SimpleLabeledInstancesImpl labeledinstances)  {
+		ExchangeTest.STOP_TIME("predict_and_score started");
 		List<String> predictions = predict(labeledinstances);
 		boolean normalize = true;
 		int index = 0;
@@ -238,6 +245,7 @@ public class WekaClassifierWrapper extends ServiceWrapper{
 			}
 			index++;
 		}
+		ExchangeTest.STOP_TIME("predict_and_score ended");
 		if(normalize) {
 			double normalizedScore = ((double)score) / ((double)labeledinstances.size());
 			double roundedNormalizedScore =  MathExt.round(normalizedScore, 2);

@@ -22,7 +22,7 @@ public abstract class ServiceWrapper implements Serializable{
 	/** The wrapped Object constructor. */
 	public transient final Constructor<? extends Object> delegateConstructor;
 	/** Values fed to constructor when invoking 'buildDelegate()'. */
-	public transient final Object[] constructorValues;
+	protected transient final Object[] constructorValues;
 	
 	/** The types corresponding to the parameters of the constructor of the wrapper. */ 
 	public static final Class<?>[] CONSTRUCTOR_TYPES = {Constructor.class, Object[].class};

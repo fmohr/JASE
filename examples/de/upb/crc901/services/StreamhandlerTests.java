@@ -1,8 +1,13 @@
 package de.upb.crc901.services;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -19,6 +24,7 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import de.upb.crc901.services.core.OntologicalTypeMarshallingSystem;
 import de.upb.crc901.services.streamhandlers.InstanceStreamHandler;
 import de.upb.crc901.services.streamhandlers.InstancesStreamHandler;
 import de.upb.crc901.services.streamhandlers.LabeledInstanceStreamHandler;
@@ -41,7 +47,7 @@ public class StreamhandlerTests {
 	List<String> stringList = null;
 	
 	@Before
-	public void setup() {
+	public void setup() throws FileNotFoundException, IOException {
 		// Create some arbitrary test data:
 		
 		instances = new SimpleInstancesImpl();
@@ -59,11 +65,24 @@ public class StreamhandlerTests {
 			instances.add(instance);
 			linstances.add(linstance);
 		}
+		
+
+		weka.core.Instances wekaInstances = new weka.core.Instances(
+				new BufferedReader(new FileReader(
+						"../CrcTaskBasedConfigurator/testrsc" +
+//								File.separator + "polychotomous" +
+//								File.separator + "audiology.arff")));	
+								File.separator + "mnist" +
+								File.separator + "train.arff")));
+		wekaInstances.setClassIndex(0);
+		OntologicalTypeMarshallingSystem otms = new OntologicalTypeMarshallingSystem();
+		linstances = (LabeledInstances<String>) otms.objectToSemantic(wekaInstances).getData();
 	}
 	@Test
-	public void testWrite() throws IOException {
+	public void testAll() throws IOException {
 		JsonFactory jfactory = new JsonFactory();
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		JsonParser jParser = null;
 		JsonGenerator jGenerator = jfactory
 		  .createGenerator(out, JsonEncoding.UTF8);
 		// instance test
@@ -73,7 +92,9 @@ public class StreamhandlerTests {
 		
 		String sentJson = out.toString();
 		System.out.println(sentJson);
-		SimpleInstanceImpl instance2 = new SimpleInstanceImpl(sentJson);
+		jParser = jfactory.createParser(sentJson);
+		jParser.nextToken();
+		Instance instance2 = handler.read(jParser);
 		Assert.assertEquals(instance, instance2);
 		
 		out.reset();
@@ -84,7 +105,9 @@ public class StreamhandlerTests {
 		
 		sentJson = out.toString();
 		System.out.println(sentJson);
-		SimpleInstancesImpl instances2 = new SimpleInstancesImpl(sentJson);
+		jParser = jfactory.createParser(sentJson);
+		jParser.nextToken();
+		Instances instances2 = handler2.read(jParser);
 		Assert.assertEquals(instances, instances2);
 		
 		out.reset();
@@ -95,8 +118,10 @@ public class StreamhandlerTests {
 		
 		sentJson = out.toString();
 		System.out.println(sentJson);
-		SimpleLabeledInstanceImpl linstance2 = new SimpleLabeledInstanceImpl(sentJson);
-		Assert.assertEquals(instance, linstance2);
+		jParser = jfactory.createParser(sentJson);
+		jParser.nextToken();
+		LabeledInstance<String> linstance2 = handler3.read(jParser);
+		Assert.assertEquals(linstance, linstance2);
 
 		out.reset();
 		// labeled instances test
@@ -106,8 +131,10 @@ public class StreamhandlerTests {
 
 		sentJson = out.toString();
 		System.out.println(sentJson);
-		SimpleLabeledInstancesImpl linstances2 = new SimpleLabeledInstancesImpl(sentJson);
-		Assert.assertEquals(instances, linstances2);
+		jParser = jfactory.createParser(sentJson);
+		jParser.nextToken();
+		LabeledInstances<String> linstances2 = handler4.read(jParser);
+		Assert.assertEquals(linstances, linstances2);
 		
 		out.reset();
 		// string list test
@@ -125,17 +152,17 @@ public class StreamhandlerTests {
 		Assert.assertEquals(stringList, stringlist2);
 	}
 	
-	@Test
-	public void testRead() throws JsonParseException, IOException {
-		
-		JsonFactory jfactory = new JsonFactory();
-		// test instance
-		JsonParser jParser = jfactory.createParser(instance.toJson());
-		InstanceStreamHandler handler1 = new InstanceStreamHandler();
-		Instance instance2 = handler1.read(jParser);
-		Assert.assertEquals(instance, instance2);
-		// ..  TODO write tests for all the other readers
-	}
+//	@Test
+//	public void testRead() throws JsonParseException, IOException {
+//		
+//		JsonFactory jfactory = new JsonFactory();
+//		// test instance
+//		JsonParser jParser = jfactory.createParser(instance.toJson());
+//		InstanceStreamHandler handler1 = new InstanceStreamHandler();
+//		Instance instance2 = handler1.read(jParser);
+//		Assert.assertEquals(instance, instance2);
+//		// ..  TODO write tests for all the other readers
+//	}
 	
 	
 	

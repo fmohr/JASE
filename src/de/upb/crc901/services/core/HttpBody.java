@@ -124,6 +124,7 @@ public final class HttpBody {
 	}
 	
 	private JASEDataObject parseToSemanticObject(OntologicalTypeMarshallingSystem otms, Object o) {
+		
 		if(isPrimitive(o)) {
 			// unparsed
 			JASEDataObject jdo = new JASEDataObject(PRIMITIVE_TYPE, o);
@@ -277,7 +278,6 @@ public final class HttpBody {
 		
 		Method write = MethodUtils.getMatchingAccessibleMethod(streamHandlerClass, "write", JsonGenerator.class, handler.getSupportedSemanticClass());
 		assert write != null : "Could not find method \"write(" + JsonGenerator.class + ", " + handler.getSupportedSemanticClass() + ")\" in streamhandler class " + streamHandlerClassName;
-		
 		try {
 			write.invoke(handler, jsonOut, jdo.getData());
 		} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
@@ -308,15 +308,7 @@ public final class HttpBody {
 
 	/**
 	 * Encodes this instance and writes it chunk wise through the outStream.
-	 * @param otms The marshaling system used to parse the arguments objects to semantic objects
 	 * @throws IOException 
-	 * @throws SecurityException 
-	 * @throws NoSuchMethodException 
-	 * @throws InstantiationException 
-	 * @throws ClassNotFoundException 
-	 * @throws InvocationTargetException 
-	 * @throws IllegalArgumentException 
-	 * @throws IllegalAccessException 
 	 */
 	public void writeBody(OutputStream outStream) throws IOException {
 		writeBodyAsJson(outStream);

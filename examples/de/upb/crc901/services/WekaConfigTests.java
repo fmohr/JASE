@@ -77,7 +77,7 @@ public class WekaConfigTests {
 		server.shutdown();
 	}
 	
-//	@Test
+	@Test
 	/**
 	 * Iterates over all classifiers in the config and tries to train and evaluate them.
 	 */
@@ -106,7 +106,7 @@ public class WekaConfigTests {
 		}
 		System.out.println("Error occurred with these classifiers:\n" + errorSet);
 	}
-	@Test
+//	@Test
 	public void testAllPreprocessors() throws IOException {
 		Set<String> errorSet = new HashSet<>();
 		for(String wekaPreprocessor : server.getClassesConfig().allSubconfigs(basePreprocessorConfigName)) {

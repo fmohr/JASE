@@ -26,8 +26,15 @@ import de.upb.crc901.services.core.HttpServiceClient;
 import de.upb.crc901.services.core.HttpServiceServer;
 import de.upb.crc901.services.core.OntologicalTypeMarshallingSystem;
 import de.upb.crc901.services.core.ServiceCompositionResult;
+import de.upb.crc901.services.wrappers.WekaClassifierWrapper;
 import jaicore.basic.FileUtil;
 import jaicore.ml.WekaUtil;
+import jaicore.ml.core.SimpleLabeledInstancesImpl;
+import jaicore.ml.interfaces.LabeledInstances;
+import weka.classifiers.Classifier;
+import weka.classifiers.functions.MultilayerPerceptron;
+import weka.classifiers.trees.RandomTree;
+import weka.core.Instance;
 import weka.core.Instances;
 
 /**
@@ -58,7 +65,7 @@ public class DeployTests {
 						"../CrcTaskBasedConfigurator/testrsc" +
 								File.separator + "polychotomous" +
 								File.separator + "audiology.arff")));	
-//								File.separator + "secom" +
+//								File.separator + "mnist" +
 //								File.separator + "test.arff")));
 
 		wekaInstances.setClassIndex(wekaInstances.numAttributes() - 1);
@@ -78,21 +85,21 @@ public class DeployTests {
 	public void tearDown() throws Exception {
 	}
 
-	@Test
+//	@Test
 	public void test_preproPase_classifyPase() throws FileNotFoundException, IOException {
 		List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .1f, .8f);
 		ServiceCompositionResult result = executeComposition("testrsc/deployPase.txt", split.get(0), split.get(1), split.get(2));
 		System.out.println("Prediction accuracy Scikit RandomForestClassifier: " + result.get("Accuracy").getData());
 	}
 	
-	@Test
+//	@Test
 	public void test_preproPase_classifyJase() throws FileNotFoundException, IOException {
 		List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .1f, .8f);
 		ServiceCompositionResult result = executeComposition("testrsc/deployJase.txt", split.get(0), split.get(1), split.get(2));
 		System.out.println("Prediction accuracy Weka RandomForest: " + result.get("Accuracy").getData());
 	}
 	
-	@Test
+//	@Test
 	public void test_nn_tensorflow() throws IOException {
 		List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .8f, .14f, 0.05f);
 		ServiceCompositionResult result = executeComposition("testrsc/nn_tf.txt", split.get(0), split.get(1), split.get(2));
@@ -102,7 +109,7 @@ public class DeployTests {
 		
 	}
 	
-	@Test
+//	@Test
 	public void test_nn_weka() throws IOException {
 		List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .8f, .14f, 0.05f);
 		ServiceCompositionResult result = executeComposition("testrsc/nn_weka.txt", split.get(0), split.get(1), split.get(2));
@@ -111,7 +118,7 @@ public class DeployTests {
 		//System.out.println("Predictions by NN TF: " + predictions);
 	}
 	
-	@Test
+//	@Test
 	public void test_nn_scikit() throws IOException {
 		List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .1f, .7f, 0.2f);
 		ServiceCompositionResult result = executeComposition("testrsc/nn_sk.txt", split.get(0), split.get(1), split.get(2));
@@ -130,6 +137,43 @@ public class DeployTests {
         return result;
 	}
 	
-	
-
+	@Test
+	public void test_runtime_weka() throws IOException, NoSuchMethodException, SecurityException {
+		ExchangeTest.STOP_TIME("test started");
+		List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(1), .8f);
+		ExchangeTest.STOP_TIME("data gathered");
+//		System.out.println("split0: " + split.get(0).size() + " split1: " + split.get(1).size());
+		Classifier localService = new RandomTree();
+		
+		try {
+			// train local service
+			localService.buildClassifier(split.get(0));
+			// score local service
+			float size = (float)split.get(1).size();
+			float score = 0f;
+			for(Instance instance : split.get(1)) {
+				double result = localService.classifyInstance(instance);
+				if(result == instance.classValue()) {
+					score += 1f;
+				}
+			}
+			score = score / size;
+			ExchangeTest.STOP_TIME("Prediction accuracy local Weka: " + score + " time");
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		
+		// train local wrapper:
+		LabeledInstances<String> trainset = (LabeledInstances<String>) otms.objectToSemantic(split.get(0)).getData();
+		LabeledInstances<String> testset = (LabeledInstances<String>) otms.objectToSemantic(split.get(1)).getData();
+		
+		WekaClassifierWrapper localWrapper = new WekaClassifierWrapper(RandomTree.class.getConstructor(), new Object[0]);
+		localWrapper.train(trainset);
+		double score = localWrapper.predict_and_score((SimpleLabeledInstancesImpl) testset);
+		ExchangeTest.STOP_TIME("Prediction accuracy local wrapper: " + score + " time");
+		
+		// service composition call:
+		ServiceCompositionResult result = executeComposition("testrsc/nn_weka.txt", split.get(0), split.get(1));
+		ExchangeTest.STOP_TIME("Prediction accuracy service Weka: " + result.get("Accuracy").getData() + " time");
+	}
 }

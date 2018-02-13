@@ -32,6 +32,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import de.upb.crc901.services.ExchangeTest;
+
 public class OntologicalTypeMarshallingSystem {
 
 	private final Logger logger = LoggerFactory.getLogger(OntologicalTypeMarshallingSystem.class);

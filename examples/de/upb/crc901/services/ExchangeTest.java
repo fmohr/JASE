@@ -1,19 +1,28 @@
 package de.upb.crc901.services;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.StringBufferInputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import de.upb.crc901.services.core.HttpBody;
+import de.upb.crc901.services.core.HttpServiceClient;
+import de.upb.crc901.services.core.HttpServiceServer;
 import de.upb.crc901.services.core.JASEDataObject;
+import de.upb.crc901.services.core.OntologicalTypeMarshallingSystem;
+import jaicore.ml.WekaUtil;
 import jaicore.ml.core.SimpleInstanceImpl;
 import jaicore.ml.core.SimpleInstancesImpl;
 import jaicore.ml.core.SimpleLabeledInstanceImpl;
@@ -29,6 +38,30 @@ public class ExchangeTest {
 	LabeledInstance<String> linstance = null;
 	LabeledInstances<String> linstances = null;
 	List<String> stringList = null;
+	
+	private static weka.core.Instances wekaInstances;
+	private static HttpServiceServer server;
+	private static HttpServiceClient client;
+	
+	private static final OntologicalTypeMarshallingSystem otms = new OntologicalTypeMarshallingSystem();
+	
+	@BeforeClass
+	public static void setUpBeforeClass() throws Exception {
+		/* start server */
+		server = HttpServiceServer.TEST_SERVER();
+		
+		client = new HttpServiceClient(otms);
+		wekaInstances = new weka.core.Instances(
+				new BufferedReader(new FileReader(
+						"../CrcTaskBasedConfigurator/testrsc" +
+//								File.separator + "polychotomous" +
+//								File.separator + "audiology.arff")));	
+								File.separator + "mnist" +
+								File.separator + "train.arff")));
+
+		wekaInstances.setClassIndex(wekaInstances.numAttributes() - 1);
+		
+	}
 	
 	@Before
 	public void setup() {
@@ -51,7 +84,7 @@ public class ExchangeTest {
 		}
 	}
 	
-	@Test
+//	@Test
 	public void basicTest() throws IllegalAccessException, IllegalArgumentException, InvocationTargetException, ClassNotFoundException, InstantiationException, NoSuchMethodException, SecurityException, IOException {
 		HttpBody body = new HttpBody();
 		body.setComposition("something");
@@ -69,4 +102,33 @@ public class ExchangeTest {
 		body2.readfromBody(in);
 		Assert.assertEquals(body, body2);
 	}
+
+	private static long timestart = System.currentTimeMillis();
+	
+	public static void STOP_TIME(String label) {
+		long difference = System.currentTimeMillis() - timestart;
+		System.out.println(label + ": " + difference + " ms");
+		ExchangeTest.timestart = System.currentTimeMillis();
+	}
+	
+	@Test 
+	public void timedTest() throws IOException {
+//		List<weka.core.Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .01f);
+//		wekaInstances = split.get(0);
+		STOP_TIME("Loaded data");
+		// write to a Server
+		client.callServiceOperation("localhost:8000/nope", wekaInstances);
+		STOP_TIME("received data");
+
+		// write to a ByteArrayOutputStream
+
+		HttpBody body = new HttpBody();
+		body.addUnparsedKeywordArgument(otms, "a", wekaInstances);
+		STOP_TIME("Parsing to labeledinstaces took");
+		ByteArrayOutputStream stringOutStream = new ByteArrayOutputStream();
+		body.writeBody(stringOutStream);
+		STOP_TIME("streamed into a ByteArrayOutputStream");
+		
+	}
+	
 }
