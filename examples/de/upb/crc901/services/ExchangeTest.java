@@ -22,6 +22,7 @@ import de.upb.crc901.services.core.HttpServiceClient;
 import de.upb.crc901.services.core.HttpServiceServer;
 import de.upb.crc901.services.core.JASEDataObject;
 import de.upb.crc901.services.core.OntologicalTypeMarshallingSystem;
+import de.upb.crc901.services.core.TimeLogger;
 import jaicore.ml.WekaUtil;
 import jaicore.ml.core.SimpleInstanceImpl;
 import jaicore.ml.core.SimpleInstancesImpl;
@@ -54,10 +55,10 @@ public class ExchangeTest {
 		wekaInstances = new weka.core.Instances(
 				new BufferedReader(new FileReader(
 						"../CrcTaskBasedConfigurator/testrsc" +
-//								File.separator + "polychotomous" +
-//								File.separator + "audiology.arff")));	
-								File.separator + "mnist" +
-								File.separator + "train.arff")));
+								File.separator + "polychotomous" +
+								File.separator + "audiology.arff")));	
+//								File.separator + "mnist" +
+//								File.separator + "train.arff")));
 
 		wekaInstances.setClassIndex(wekaInstances.numAttributes() - 1);
 		
@@ -103,31 +104,24 @@ public class ExchangeTest {
 		Assert.assertEquals(body, body2);
 	}
 
-	private static long timestart = System.currentTimeMillis();
-	
-	public static void STOP_TIME(String label) {
-		long difference = System.currentTimeMillis() - timestart;
-		System.out.println(label + ": " + difference + " ms");
-		ExchangeTest.timestart = System.currentTimeMillis();
-	}
 	
 	@Test 
 	public void timedTest() throws IOException {
 //		List<weka.core.Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .01f);
 //		wekaInstances = split.get(0);
-		STOP_TIME("Loaded data");
+		TimeLogger.STOP_TIME("Loaded data");
 		// write to a Server
 		client.callServiceOperation("localhost:8000/nope", wekaInstances);
-		STOP_TIME("received data");
+		TimeLogger.STOP_TIME("received data");
 
 		// write to a ByteArrayOutputStream
 
 		HttpBody body = new HttpBody();
 		body.addUnparsedKeywordArgument(otms, "a", wekaInstances);
-		STOP_TIME("Parsing to labeledinstaces took");
+		TimeLogger.STOP_TIME("Parsing to labeledinstaces took");
 		ByteArrayOutputStream stringOutStream = new ByteArrayOutputStream();
 		body.writeBody(stringOutStream);
-		STOP_TIME("streamed into a ByteArrayOutputStream");
+		TimeLogger.STOP_TIME("streamed into a ByteArrayOutputStream");
 		
 	}
 	

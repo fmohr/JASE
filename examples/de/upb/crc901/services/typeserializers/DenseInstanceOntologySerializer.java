@@ -14,6 +14,9 @@ import jaicore.ml.WekaUtil;
 import jaicore.ml.core.SimpleLabeledInstanceImpl;
 import jaicore.ml.interfaces.LabeledInstance;
 import weka.core.DenseInstance;
+import weka.core.Instance;
+import weka.core.Instances;
+import weka.filters.Filter;
 
 public class DenseInstanceOntologySerializer implements IOntologySerializer<DenseInstance> {
 
@@ -41,7 +44,20 @@ public class DenseInstanceOntologySerializer implements IOntologySerializer<Dens
 			type = "Instance";
 		}
 		else {
-			object = WekaUtil.toJAICoreLabeledInstance(instance);
+			Instances instances = new Instances(instance.dataset(), 1);
+			instances.add(instance);
+			weka.filters.unsupervised.attribute.NominalToBinary toBinFilter = new weka.filters.unsupervised.attribute.NominalToBinary();
+			Instance filteredInstace = null;
+			try {
+				toBinFilter.setInputFormat(instances);
+				instances = Filter.useFilter(instances, toBinFilter);
+				filteredInstace = instances.get(0);
+			} catch (Exception e) {
+				e.printStackTrace();
+				throw new RuntimeException(e);
+			}
+			
+			object = WekaUtil.toJAICoreLabeledInstance(filteredInstace);
 			type = "LabeledInstance";
 		}
 		JASEDataObject jdo = new JASEDataObject(type, object);

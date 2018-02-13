@@ -75,7 +75,7 @@ import weka.core.Instance;
 
 public class HttpServiceServer {
 
-	public static final Logger logger = LoggerFactory.getLogger(HttpServiceServer.class);
+	private static final Logger logger = LoggerFactory.getLogger(HttpServiceServer.class);
 
 	private static File folder = new File("http");
 
@@ -326,7 +326,7 @@ public class HttpServiceServer {
 			clazz = parts[0];
 			methodName = parts[1];
 			if (methodName.equals("__construct")) {
-				logger.info("The invocation creates a new service instance");
+				logger.info("The invocation cr eates a new service instance");
 				Class serviceClass = null;
 				try {
 					serviceClass = Class.forName(clazz);;

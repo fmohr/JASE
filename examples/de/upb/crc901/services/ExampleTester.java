@@ -138,7 +138,7 @@ public class ExampleTester {
 		
 	}
 
-	@Test
+//	@Test
 	public void testImageProcessor() throws Exception {
 
 		/* create new classifier */
@@ -152,7 +152,7 @@ public class ExampleTester {
 		JOptionPane.showMessageDialog(null, result.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
 	}
 	
-	@Test
+//	@Test
 	public void testSequentialCompositionSerializer() throws Exception{
 		SequentialCompositionSerializer scs = new SequentialCompositionSerializer();
 		SequentialComposition sc = scs.readComposition("a = foo::bar({})");

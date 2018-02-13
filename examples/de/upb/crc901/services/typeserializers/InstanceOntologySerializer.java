@@ -13,6 +13,8 @@ import jaicore.ml.WekaUtil;
 import jaicore.ml.core.SimpleLabeledInstanceImpl;
 import jaicore.ml.interfaces.LabeledInstance;
 import weka.core.Instance;
+import weka.core.Instances;
+import weka.filters.Filter;
 
 public class InstanceOntologySerializer implements IOntologySerializer<Instance> {
 	private static final List<String> supportedTypes = Arrays.asList(new String[] {"Instance", "LabeledInstance"});
@@ -36,11 +38,25 @@ public class InstanceOntologySerializer implements IOntologySerializer<Instance>
 		
 	}
 
-	public JASEDataObject serialize(final Instance instance) {
+	public JASEDataObject serialize(Instance instance) {
 		if (instance.classIndex() < 0)
 			return new JASEDataObject("Instance", WekaUtil.toJAICoreInstance(instance));
-		else
+		else {
+			Instances instances = new Instances(instance.dataset(), 1);
+			instances.add(instance);
+			weka.filters.unsupervised.attribute.NominalToBinary toBinFilter = new weka.filters.unsupervised.attribute.NominalToBinary();
+			
+			try {
+				toBinFilter.setInputFormat(instances);
+				instances = Filter.useFilter(instances, toBinFilter);
+				instance = instances.get(0);
+			} catch (Exception e) {
+				e.printStackTrace();
+				throw new RuntimeException(e);
+			}
+			
 			return new JASEDataObject("LabeledInstance", WekaUtil.toJAICoreLabeledInstance(instance));
+		}
 	}
 
 	@Override

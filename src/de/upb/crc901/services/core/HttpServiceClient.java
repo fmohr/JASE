@@ -105,7 +105,7 @@ public class HttpServiceClient {
 			body.addKeyworkArgument(keyword, parsedSemanticInput);
 		}
 
-		ExchangeTest.STOP_TIME("Data parsed");
+		TimeLogger.STOP_TIME("Data parsed");
 		/* setup connection */
 		URL url = new URL("http://" + host + "/" + service + "/" + opName);
 		if(serializedCoreography != null) {
@@ -121,7 +121,7 @@ public class HttpServiceClient {
 		OutputStream out = con.getOutputStream();
 		body.writeBody(out);
 		out.close();
-		ExchangeTest.STOP_TIME("Sent data");
+		TimeLogger.STOP_TIME("Sent data");
 		HttpBody returnedBody = new HttpBody();
 		/* read and return answer */
 		try (InputStream in = con.getInputStream()){

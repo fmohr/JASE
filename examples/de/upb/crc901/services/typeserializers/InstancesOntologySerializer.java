@@ -12,22 +12,26 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import de.upb.crc901.services.ExchangeTest;
 import de.upb.crc901.services.core.IOntologySerializer;
 import de.upb.crc901.services.core.JASEDataObject;
+import de.upb.crc901.services.core.TimeLogger;
 import jaicore.ml.WekaUtil;
 import jaicore.ml.core.SimpleInstancesImpl;
+import jaicore.ml.core.SimpleLabeledInstanceImpl;
 import jaicore.ml.core.SimpleLabeledInstancesImpl;
 import jaicore.ml.core.WekaCompatibleInstancesImpl;
 import jaicore.ml.interfaces.LabeledInstances;
 import weka.core.Instance;
 import weka.core.Instances;
+import weka.filters.Filter;
+import weka.filters.unsupervised.attribute.NominalToBinary;
 
 public class InstancesOntologySerializer implements IOntologySerializer<Instances>  {
 	
 	private static final List<String> supportedTypes = Arrays.asList(new String[] {"Instances", "LabeledInstances"});
 	
 	public  Instances unserialize(final JASEDataObject jdo) {
-		ExchangeTest.STOP_TIME("labeledinstances -> wekainstance started");
+//		TimeLogger.STOP_TIME("labeledinstances -> wekainstance started");
 		if(jdo.getData() instanceof jaicore.ml.interfaces.Instances) {
-			ExchangeTest.STOP_TIME("unserialize done");
+//			TimeLogger.STOP_TIME("unserialize done");
 			return WekaUtil.fromJAICoreInstances((jaicore.ml.interfaces.Instances)jdo.getData());
 		} else if(jdo.getData() instanceof LabeledInstances<?>) {
 			throw new NotImplementedException("There is no bridge between labeledinstances and weka instances yet.");
@@ -37,16 +41,31 @@ public class InstancesOntologySerializer implements IOntologySerializer<Instance
 		}
 	}
 
-	public JASEDataObject serialize(final Instances wekaInstances) {
-		ExchangeTest.STOP_TIME("wekainstance -> labeledinstances with size: " + wekaInstances.size() + " started");
-		if (wekaInstances.classIndex() < 0)
-			return new JASEDataObject("Instances", WekaUtil.toJAICoreInstances(wekaInstances));
+	public JASEDataObject serialize(Instances wekaInstances) {
+//		TimeLogger.STOP_TIME("wekainstance -> labeledinstances with size: " + wekaInstances.size() + " started");
+		if (wekaInstances.classIndex() < 0) {
+//			return new JASEDataObject("Instances", WekaUtil.toJAICoreInstances(wekaInstances));
+			throw new RuntimeException();
+		}
 		else {
 			LabeledInstances<String> linstances = new SimpleLabeledInstancesImpl();
-			for (Instance inst : wekaInstances) {
-				linstances.add(WekaUtil.toJAICoreLabeledInstance(inst));
+			weka.filters.unsupervised.attribute.NominalToBinary toBinFilter = new weka.filters.unsupervised.attribute.NominalToBinary();
+			
+			try {
+				toBinFilter.setInputFormat(wekaInstances);
+				wekaInstances = Filter.useFilter(wekaInstances, toBinFilter);
+			} catch (Exception e) {
+				e.printStackTrace();
+				throw new RuntimeException(e);
+			}
+			for (Instance wekaInst : wekaInstances) {
+				jaicore.ml.interfaces.LabeledInstance<String> inst = new SimpleLabeledInstanceImpl();
+				for (int att = 0; att < wekaInst.numAttributes() && att != wekaInst.classIndex(); att++) {
+					inst.add(wekaInst.value(att));
+				}
+				inst.setLabel(wekaInst.classAttribute().value((int) wekaInst.classValue()));
+				linstances.add(inst);
 		    }
-			ExchangeTest.STOP_TIME("serialize done");
 			return new JASEDataObject("LabeledInstances", linstances);
 		}
 	}

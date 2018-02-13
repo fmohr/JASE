@@ -26,6 +26,7 @@ import de.upb.crc901.services.core.HttpServiceClient;
 import de.upb.crc901.services.core.HttpServiceServer;
 import de.upb.crc901.services.core.OntologicalTypeMarshallingSystem;
 import de.upb.crc901.services.core.ServiceCompositionResult;
+import de.upb.crc901.services.core.TimeLogger;
 import de.upb.crc901.services.wrappers.WekaClassifierWrapper;
 import jaicore.basic.FileUtil;
 import jaicore.ml.WekaUtil;
@@ -63,10 +64,10 @@ public class DeployTests {
 		wekaInstances = new Instances(
 				new BufferedReader(new FileReader(
 						"../CrcTaskBasedConfigurator/testrsc" +
-								File.separator + "polychotomous" +
-								File.separator + "audiology.arff")));	
-//								File.separator + "mnist" +
-//								File.separator + "test.arff")));
+//								File.separator + "polychotomous" +
+//								File.separator + "audiology.arff")));	
+								File.separator + "mnist" +
+								File.separator + "train.arff")));
 
 		wekaInstances.setClassIndex(wekaInstances.numAttributes() - 1);
 		
@@ -139,9 +140,9 @@ public class DeployTests {
 	
 	@Test
 	public void test_runtime_weka() throws IOException, NoSuchMethodException, SecurityException {
-		ExchangeTest.STOP_TIME("test started");
+		TimeLogger.STOP_TIME("test started");
 		List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(1), .8f);
-		ExchangeTest.STOP_TIME("data gathered");
+		TimeLogger.STOP_TIME("data gathered");
 //		System.out.println("split0: " + split.get(0).size() + " split1: " + split.get(1).size());
 		Classifier localService = new RandomTree();
 		
@@ -158,7 +159,7 @@ public class DeployTests {
 				}
 			}
 			score = score / size;
-			ExchangeTest.STOP_TIME("Prediction accuracy local Weka: " + score + " time");
+			TimeLogger.STOP_TIME("Prediction accuracy local Weka: " + score + " time");
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -170,10 +171,10 @@ public class DeployTests {
 		WekaClassifierWrapper localWrapper = new WekaClassifierWrapper(RandomTree.class.getConstructor(), new Object[0]);
 		localWrapper.train(trainset);
 		double score = localWrapper.predict_and_score((SimpleLabeledInstancesImpl) testset);
-		ExchangeTest.STOP_TIME("Prediction accuracy local wrapper: " + score + " time");
+		TimeLogger.STOP_TIME("Prediction accuracy local wrapper: " + score + " time");
 		
 		// service composition call:
 		ServiceCompositionResult result = executeComposition("testrsc/nn_weka.txt", split.get(0), split.get(1));
-		ExchangeTest.STOP_TIME("Prediction accuracy service Weka: " + result.get("Accuracy").getData() + " time");
+		TimeLogger.STOP_TIME("Prediction accuracy service Weka: " + result.get("Accuracy").getData() + " time");
 	}
 }
