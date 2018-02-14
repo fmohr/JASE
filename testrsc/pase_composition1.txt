@@ -1,0 +1,4 @@
+x_norm = 0.0.0.0:5000/sklearn.preprocessing::normalize({X=training_data});  
+model = sklearn.ensemble.RandomForestClassifier::__construct({,});  
+empty = model::fit({X=x_norm});    
+prediction = model::predict({X=prediction_data});
