@@ -37,6 +37,9 @@ import weka.classifiers.functions.MultilayerPerceptron;
 import weka.classifiers.trees.RandomTree;
 import weka.core.Instance;
 import weka.core.Instances;
+import weka.core.NominalAttributeInfo;
+import weka.filters.Filter;
+import weka.filters.unsupervised.attribute.NominalToBinary;
 
 /**
  * Contains a deployment test case for presentation purposes.
@@ -52,8 +55,11 @@ public class DeployTests {
 
 	private static HttpServiceClient client;
 	private static final OntologicalTypeMarshallingSystem otms = new OntologicalTypeMarshallingSystem();
-	
+
 	private static Instances wekaInstances;
+	private static Instances wekaInstancesSmall;
+	private static Instances wekaInstancesLarge;
+	private static Instances wekaInstancesXLarge;
 	
 	@BeforeClass
 	public static void setUpBeforeClass() throws Exception {
@@ -64,13 +70,33 @@ public class DeployTests {
 		wekaInstances = new Instances(
 				new BufferedReader(new FileReader(
 						"../CrcTaskBasedConfigurator/testrsc" +
-//								File.separator + "polychotomous" +
-//								File.separator + "audiology.arff")));	
-								File.separator + "mnist" +
-								File.separator + "train.arff")));
+								File.separator + "polychotomous" +
+								File.separator + "audiology.arff")));	
+//								File.separator + "mnist" +
+//								File.separator + "test.arff")));
 
 		wekaInstances.setClassIndex(wekaInstances.numAttributes() - 1);
 		
+		wekaInstancesSmall = new Instances(
+				new BufferedReader(new FileReader(
+						"../CrcTaskBasedConfigurator/testrsc" +
+								File.separator + "secom" +
+								File.separator + "train.arff")));	
+		wekaInstancesSmall.setClassIndex(wekaInstancesSmall.numAttributes() - 1);
+		
+		wekaInstancesLarge = new Instances(
+				new BufferedReader(new FileReader(
+						"../CrcTaskBasedConfigurator/testrsc" +
+								File.separator + "mnist" +
+								File.separator + "train.arff")));	
+		wekaInstancesLarge.setClassIndex(wekaInstancesLarge.numAttributes() - 1);
+		
+		wekaInstancesXLarge = new Instances(
+				new BufferedReader(new FileReader(
+						"../CrcTaskBasedConfigurator/testrsc" +
+								File.separator + "mnist" +
+								File.separator + "test.arff")));
+		wekaInstancesXLarge.setClassIndex(wekaInstancesXLarge.numAttributes() - 1);
 	}
 
 	@AfterClass
@@ -139,42 +165,115 @@ public class DeployTests {
 	}
 	
 	@Test
-	public void test_runtime_weka() throws IOException, NoSuchMethodException, SecurityException {
-		TimeLogger.STOP_TIME("test started");
-		List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(1), .8f);
-		TimeLogger.STOP_TIME("data gathered");
-//		System.out.println("split0: " + split.get(0).size() + " split1: " + split.get(1).size());
-		Classifier localService = new RandomTree();
+	public void test_runtime_weka() throws Exception {
+		System.out.println("DeployTests:test_runtime_weka() starts");
 		
-		try {
-			// train local service
-			localService.buildClassifier(split.get(0));
-			// score local service
-			float size = (float)split.get(1).size();
-			float score = 0f;
-			for(Instance instance : split.get(1)) {
-				double result = localService.classifyInstance(instance);
-				if(result == instance.classValue()) {
-					score += 1f;
+		Instances[] datasets = {wekaInstancesSmall, wekaInstancesLarge, wekaInstancesXLarge};
+		
+		for(Instances dataset : datasets) {
+			if(dataset == null) {
+				System.out.println("Data set is null.");
+				continue;
+			}
+			List<Instances> nominalSplit = WekaUtil.getStratifiedSplit(dataset, new Random(1), .8f);
+			Filter nominalToBin = new NominalToBinary();
+			nominalToBin.setInputFormat(dataset);
+			Instances binData = Filter.useFilter(dataset, nominalToBin);
+			List<Instances> binSplit = WekaUtil.getStratifiedSplit(dataset, new Random(1), .8f);
+
+			Instances trainSet = nominalSplit.get(0);
+			Instances testSet = nominalSplit.get(1);
+			
+			System.out.println("\n\tStart to test time for trainset size: " + trainSet.size() + " and testset size: " + testSet.size() + "\n");
+
+			Classifier localService1 = new RandomTree();
+			Classifier localService2 = new RandomTree();
+			
+			
+			// local service
+			long startTime = System.currentTimeMillis();
+			List<String> predictionsLocalOriginal = runLocalClassifier(localService1, trainSet, testSet);
+			System.out.println("Total Time for local classifier, original dataset: " + (System.currentTimeMillis() - startTime) + " ms" );
+			localService1 = null;
+			// local service for filtered data
+			startTime = System.currentTimeMillis();
+			List<String> predictionsLocalBinary = runLocalClassifier(localService2, binSplit.get(0), binSplit.get(1));
+			System.out.println("Total Time for local classifier, dataset with binary attributes: " + (System.currentTimeMillis() - startTime) + " ms" );
+			localService2 = null;
+			// local wrapper:
+			// parse data
+			startTime = System.currentTimeMillis();
+			LabeledInstances<String> parsedTrainSet = (LabeledInstances<String>) otms.objectToSemantic(trainSet).getData();
+			LabeledInstances<String> parsedTestSet = (LabeledInstances<String>) otms.objectToSemantic(testSet).getData();
+			long parsingTime = (System.currentTimeMillis() - startTime);
+			System.out.println("Total Time for parsing data, weka -> JAICore: " + parsingTime + " ms" );
+			
+			startTime = System.currentTimeMillis();
+			WekaClassifierWrapper localWrapper = new WekaClassifierWrapper(RandomTree.class.getConstructor(), new Object[0]);
+			localWrapper.train(parsedTrainSet);
+			List<String> predictionsLocalWrapper = localWrapper.predict((SimpleLabeledInstancesImpl) parsedTestSet);
+			long localWrapperTime =  (System.currentTimeMillis() - startTime);
+			System.out.println("Total Time for wrapped classifier: " + localWrapperTime + " ms" );
+			System.out.println("Total Time for wrapped classifier, plus parsing: " + (localWrapperTime + parsingTime) + " ms" );
+			parsedTrainSet = null;
+			parsedTestSet = null;
+			localWrapper = null;
+
+			// service composition:
+			startTime = System.currentTimeMillis();
+			ServiceCompositionResult result = executeComposition("testrsc/weka_randomTree.txt", trainSet, testSet);
+			TimeLogger.STOP_TIME("Predictions received");
+			System.out.println("Total Time for http service classifier: " + (System.currentTimeMillis() - startTime) + " ms" );
+			List<String> predicitonsService = (List<String>) result.get("Predictions").getData();
+			
+			
+			assert predictionsLocalOriginal.size() ==  testSet.size();
+			assert predictionsLocalBinary.size() ==  testSet.size();
+			assert predictionsLocalWrapper.size() ==  testSet.size();
+			assert predicitonsService.size() ==  testSet.size();
+			
+			// now compare results:
+			int mismatch1 = 0, mismatch2 = 0, mismatch3 = 0;
+			
+			for(int index = 0, size = testSet.size(); index < size; index++) {
+				
+				if(! predictionsLocalOriginal.get(index).
+						equals(
+					 predictionsLocalBinary.get(index))) {
+					mismatch1++;
+				}
+				if(! predictionsLocalOriginal.get(index).
+						equals(
+					 predictionsLocalWrapper.get(index))) {
+					mismatch2++;
+				}
+				if(! predictionsLocalOriginal.get(index).
+						equals(
+					 predicitonsService.get(index))) {
+					mismatch3++;
 				}
 			}
-			score = score / size;
-			TimeLogger.STOP_TIME("Prediction accuracy local Weka: " + score + " time");
-		} catch (Exception e) {
-			e.printStackTrace();
+			System.out.println("Amount of mismatched predicitons when filtering with NominalToBonary: " + mismatch1);
+			System.out.println("Amount of mismatched predicitons when parsing to JAIcore semantic types: " + mismatch1);
+			System.out.println("Amount of mismatched predicitons when using a http service: " + mismatch1);
+			
+			
 		}
 		
-		// train local wrapper:
-		LabeledInstances<String> trainset = (LabeledInstances<String>) otms.objectToSemantic(split.get(0)).getData();
-		LabeledInstances<String> testset = (LabeledInstances<String>) otms.objectToSemantic(split.get(1)).getData();
 		
-		WekaClassifierWrapper localWrapper = new WekaClassifierWrapper(RandomTree.class.getConstructor(), new Object[0]);
-		localWrapper.train(trainset);
-		double score = localWrapper.predict_and_score((SimpleLabeledInstancesImpl) testset);
-		TimeLogger.STOP_TIME("Prediction accuracy local wrapper: " + score + " time");
-		
-		// service composition call:
-		ServiceCompositionResult result = executeComposition("testrsc/nn_weka.txt", split.get(0), split.get(1));
-		TimeLogger.STOP_TIME("Prediction accuracy service Weka: " + result.get("Accuracy").getData() + " time");
+	}
+	
+	public List<String> runLocalClassifier(Classifier classifier, Instances trainData, Instances testData) throws Exception {
+		Classifier localService = new RandomTree();
+		// train local service
+		localService.buildClassifier(trainData);
+		// score local service
+		List<String> predictedLabels = new ArrayList<>();
+		for(Instance instance : testData) {
+			double result = localService.classifyInstance(instance);
+			String predictedLabel = testData.classAttribute().value((int) result);
+			predictedLabels.add(predictedLabel);
+		}
+		return predictedLabels;
 	}
 }

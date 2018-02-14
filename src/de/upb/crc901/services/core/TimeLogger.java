@@ -14,9 +14,14 @@ public class TimeLogger {
 	
 	public static void STOP_TIME(String label) {
 		long difference = System.currentTimeMillis() - TimeLogger.timestart;
-//		log.debug(label + ": " + difference + " ms");
-		System.out.println(label + ": " + difference + " ms");
-		TimeLogger.timestart = System.currentTimeMillis();
+		String msg = "-->\t" + label + ":\n\t\t\t" + difference + " ms";
+		log.debug(msg);
+//		System.out.println(msg);
+		RESET_TIME();
+	}
+	
+	public static void RESET_TIME() {
+		timestart = System.currentTimeMillis();
 	}
 	
 }

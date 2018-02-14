@@ -3,6 +3,7 @@ package de.upb.crc901.services.typeserializers;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Enumeration;
 import java.util.List;
 
 import org.apache.commons.lang3.NotImplementedException;
@@ -19,6 +20,7 @@ import jaicore.ml.core.SimpleLabeledInstanceImpl;
 import jaicore.ml.core.SimpleLabeledInstancesImpl;
 import jaicore.ml.core.WekaCompatibleInstancesImpl;
 import jaicore.ml.interfaces.LabeledInstances;
+import weka.core.Attribute;
 import weka.core.Instance;
 import weka.core.Instances;
 import weka.filters.Filter;
@@ -58,12 +60,25 @@ public class InstancesOntologySerializer implements IOntologySerializer<Instance
 				e.printStackTrace();
 				throw new RuntimeException(e);
 			}
+			String[] classValues; // caches the class values.
+			{
+				Attribute classAttribute = wekaInstances.classAttribute();
+				classValues = new String[classAttribute.numValues()];
+				Enumeration<Object> classValueEnumerator = classAttribute.enumerateValues();
+				int index = 0;
+				while(classValueEnumerator.hasMoreElements()) {
+					classValues[index] = (String) classValueEnumerator.nextElement();
+					index ++;
+				}
+			}
+			
 			for (Instance wekaInst : wekaInstances) {
 				jaicore.ml.interfaces.LabeledInstance<String> inst = new SimpleLabeledInstanceImpl();
 				for (int att = 0; att < wekaInst.numAttributes() && att != wekaInst.classIndex(); att++) {
 					inst.add(wekaInst.value(att));
 				}
-				inst.setLabel(wekaInst.classAttribute().value((int) wekaInst.classValue()));
+				double classValue = wekaInst.classValue();
+				inst.setLabel(classValues[(int) classValue]);
 				linstances.add(inst);
 		    }
 			return new JASEDataObject("LabeledInstances", linstances);

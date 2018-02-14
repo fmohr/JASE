@@ -105,7 +105,6 @@ public class HttpServiceClient {
 			body.addKeyworkArgument(keyword, parsedSemanticInput);
 		}
 
-		TimeLogger.STOP_TIME("Data parsed");
 		/* setup connection */
 		URL url = new URL("http://" + host + "/" + service + "/" + opName);
 		if(serializedCoreography != null) {
@@ -116,12 +115,12 @@ public class HttpServiceClient {
 		con.setChunkedStreamingMode(100000);
 		con.setRequestMethod("POST");
 		con.setDoOutput(true);
-		
+		TimeLogger.STOP_TIME("Sending data started");
 		/* send data */
 		OutputStream out = con.getOutputStream();
 		body.writeBody(out);
+		TimeLogger.STOP_TIME("Sending data concluded");
 		out.close();
-		TimeLogger.STOP_TIME("Sent data");
 		HttpBody returnedBody = new HttpBody();
 		/* read and return answer */
 		try (InputStream in = con.getInputStream()){
