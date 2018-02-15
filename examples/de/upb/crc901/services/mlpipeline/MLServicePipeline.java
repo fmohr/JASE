@@ -1,0 +1,87 @@
+package de.upb.crc901.services.mlpipeline;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
+import de.upb.crc901.configurationsetting.operation.SequentialComposition;
+import de.upb.crc901.configurationsetting.serialization.SequentialCompositionSerializer;
+import de.upb.crc901.services.core.HttpServiceClient;
+import de.upb.crc901.services.core.HttpServiceServer;
+import de.upb.crc901.services.core.OntologicalTypeMarshallingSystem;
+import de.upb.crc901.services.core.ServiceHandle;
+import jaicore.basic.FileUtil;
+import weka.classifiers.Classifier;
+import weka.core.Capabilities;
+import weka.core.Instance;
+import weka.core.Instances;
+
+public class MLServicePipeline implements Classifier {
+
+	private final HttpServiceClient client = new HttpServiceClient(new OntologicalTypeMarshallingSystem());
+	private final ServiceHandle preprocessor;
+	private final ServiceHandle classifier;
+
+	public MLServicePipeline(String preprocessorName, String classifierName) {
+		super();
+		ServiceHandle preprocessorTmp = null;
+		ServiceHandle classifierTmp = null;
+		try {
+			preprocessorTmp = ((ServiceHandle) client.callServiceOperation(preprocessorName + "::__construct").get("out").getData());
+			classifierTmp = ((ServiceHandle) client.callServiceOperation(classifierName + "::__construct").get("out").getData());
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		preprocessor = preprocessorTmp;
+		classifier = classifierTmp;
+		System.out.println(preprocessor.getServiceAddress());
+		System.out.println(classifier.getServiceAddress());
+	}
+
+	@Override
+	public void buildClassifier(Instances data) throws Exception {
+		SequentialComposition comp = new SequentialCompositionSerializer().readComposition(FileUtil.readFileAsList("testrsc/pipeline_composition_train.txt"));
+		Map<String,Object> inputs = new HashMap<>();
+		inputs.put("s1", preprocessor);
+		inputs.put("s2", classifier);
+		inputs.put("i1", data);
+		client.invokeServiceComposition(comp, inputs);
+	}
+
+	@Override
+	public double classifyInstance(Instance instance) throws Exception {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	@Override
+	public double[] distributionForInstance(Instance instance) throws Exception {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Capabilities getCapabilities() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+	
+	
+	public static void main(String[] args) throws Throwable {
+		HttpServiceServer server = new HttpServiceServer(800);
+		MLServicePipeline pl = new MLServicePipeline("localhost:800/weka.classifiers.trees.RandomTree", "localhost:800/weka.classifiers.trees.RandomTree");
+		
+		Instances wekaInstances = new Instances(
+				new BufferedReader(new FileReader(
+						"../CrcTaskBasedConfigurator/testrsc" +
+								File.separator + "polychotomous" +
+								File.separator + "audiology.arff")));
+		wekaInstances.setClassIndex(wekaInstances.numAttributes() - 1);
+		pl.buildClassifier(wekaInstances);
+		System.out.println("build process ready");
+		server.shutdown();
+	}
+}

@@ -40,6 +40,7 @@ import de.upb.crc901.configurationsetting.operation.OperationInvocation;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
 import de.upb.crc901.configurationsetting.serialization.SequentialCompositionSerializer;
 import de.upb.crc901.services.ExchangeTest;
+import weka.filters.unsupervised.attribute.AddUserFields;
 
 public class HttpServiceClient {
 
@@ -67,14 +68,9 @@ public class HttpServiceClient {
 	public ServiceCompositionResult callServiceOperation(OperationInvocation call, SequentialComposition coreography, Map<String, Object> additionalInputs) throws IOException {
 		/* separate service and operation from name */
 		String opFQName = call.getOperation().getName();
-		
-		// split the opFQName into service (classpath or objectname) and operation name (function name).
 		String[] hostservice_OpTupel = opFQName.split("::", 2);
-		String[] host_serviceTupel = hostservice_OpTupel[0].split("/",2);
-		String host = host_serviceTupel[0]; // hostname e.g.: 'localhost:5000'
-		String service = host_serviceTupel[1]; // service name e.g.: 'packagePath.Constructor'
-		// If no '::' is given, assume its a '__construct' call.
-		String opName = hostservice_OpTupel.length>1 ? hostservice_OpTupel[1] : "__construct";
+		// split the opFQName into service (classpath or objectname) and operation name (function name).
+
 
 		/* prepare data */
 		// TODO coreography should have a indexof method
@@ -106,10 +102,25 @@ public class HttpServiceClient {
 		}
 
 		/* setup connection */
-		URL url = new URL("http://" + host + "/" + service + "/" + opName);
+		String host;
+		URL url;
 		if(serializedCoreography != null) {
+			String serviceKey = hostservice_OpTupel[0];
+			if (!additionalInputs.containsKey(serviceKey))
+				throw new IllegalArgumentException("Want to execute composition with first service being " + serviceKey + ", but no service handle is given in the additional inputs.");
 			// If it's a choreography, use choreography specific url
+			ServiceHandle handle = (ServiceHandle)additionalInputs.get(serviceKey);
+			host = handle.getHost();
 			url = new URL("http://" + host + "/" + "choreography");
+		}
+		else {
+			
+			String[] host_serviceTupel = hostservice_OpTupel[0].split("/",2);
+			host = host_serviceTupel[0]; // hostname e.g.: 'localhost:5000'
+			String service = host_serviceTupel[1]; // service name e.g.: 'packagePath.Constructor'
+			// If no '::' is given, assume its a '__construct' call.
+			String opName = hostservice_OpTupel.length>1 ? hostservice_OpTupel[1] : "__construct";
+			url = new URL("http://" + host + "/" + service + "/" + opName);
 		}
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
 		con.setChunkedStreamingMode(100000);
