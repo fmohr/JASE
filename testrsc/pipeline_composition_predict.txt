@@ -1,0 +1,2 @@
+data = s1::reduceDimensionality({i1=i1});
+predictions = s2::predict({i1=data});

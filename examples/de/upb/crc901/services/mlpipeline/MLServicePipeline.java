@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.security.KeyStore.Entry.Attribute;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -12,8 +13,13 @@ import de.upb.crc901.configurationsetting.serialization.SequentialCompositionSer
 import de.upb.crc901.services.core.HttpServiceClient;
 import de.upb.crc901.services.core.HttpServiceServer;
 import de.upb.crc901.services.core.OntologicalTypeMarshallingSystem;
+import de.upb.crc901.services.core.ServiceCompositionResult;
 import de.upb.crc901.services.core.ServiceHandle;
 import jaicore.basic.FileUtil;
+import weka.attributeSelection.ASSearch;
+import weka.attributeSelection.AttributeSelection;
+import weka.attributeSelection.PrincipalComponents;
+import weka.attributeSelection.Ranker;
 import weka.classifiers.Classifier;
 import weka.core.Capabilities;
 import weka.core.Instance;
@@ -25,12 +31,12 @@ public class MLServicePipeline implements Classifier {
 	private final ServiceHandle preprocessor;
 	private final ServiceHandle classifier;
 
-	public MLServicePipeline(String preprocessorName, String classifierName) {
+	public MLServicePipeline(String classifierName) {
 		super();
 		ServiceHandle preprocessorTmp = null;
 		ServiceHandle classifierTmp = null;
 		try {
-			preprocessorTmp = ((ServiceHandle) client.callServiceOperation(preprocessorName + "::__construct").get("out").getData());
+			preprocessorTmp = ((ServiceHandle) client.callServiceOperation("localhost:800/weka.attributeSelection.AttributeSelection::__construct", "weka.attributeSelection.Ranker", "weka.attributeSelection.PrincipalComponents").get("out").getData());
 			classifierTmp = ((ServiceHandle) client.callServiceOperation(classifierName + "::__construct").get("out").getData());
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -53,8 +59,13 @@ public class MLServicePipeline implements Classifier {
 
 	@Override
 	public double classifyInstance(Instance instance) throws Exception {
-		// TODO Auto-generated method stub
-		return 0;
+		SequentialComposition comp = new SequentialCompositionSerializer().readComposition(FileUtil.readFileAsList("testrsc/pipeline_composition_predict.txt"));
+		Map<String,Object> inputs = new HashMap<>();
+		inputs.put("s1", preprocessor);
+		inputs.put("s2", classifier);
+		inputs.put("i1", instance);
+		ServiceCompositionResult result = client.invokeServiceComposition(comp, inputs);
+		return (Double)result.get("predictions").getData();
 	}
 
 	@Override
@@ -71,8 +82,9 @@ public class MLServicePipeline implements Classifier {
 	
 	
 	public static void main(String[] args) throws Throwable {
-		HttpServiceServer server = new HttpServiceServer(800);
-		MLServicePipeline pl = new MLServicePipeline("localhost:800/weka.classifiers.trees.RandomTree", "localhost:800/weka.classifiers.trees.RandomTree");
+		int port = 8000;
+		HttpServiceServer server = new HttpServiceServer(port);
+		MLServicePipeline pl = new MLServicePipeline("localhost:" + port + "/weka.classifiers.trees.RandomTree");
 		
 		Instances wekaInstances = new Instances(
 				new BufferedReader(new FileReader(
