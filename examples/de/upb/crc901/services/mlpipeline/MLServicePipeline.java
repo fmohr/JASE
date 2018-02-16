@@ -17,6 +17,7 @@ import de.upb.crc901.services.core.OntologicalTypeMarshallingSystem;
 import de.upb.crc901.services.core.ServiceCompositionResult;
 import de.upb.crc901.services.core.ServiceHandle;
 import jaicore.basic.FileUtil;
+import jaicore.ml.interfaces.LabeledInstances;
 import weka.attributeSelection.ASSearch;
 import weka.attributeSelection.AttributeSelection;
 import weka.attributeSelection.PrincipalComponents;
@@ -130,8 +131,16 @@ public class MLServicePipeline implements Classifier {
 								File.separator + "polychotomous" +
 								File.separator + "audiology.arff")));
 		wekaInstances.setClassIndex(wekaInstances.numAttributes() - 1);
+		
 		pl.buildClassifier(wekaInstances);
-		System.out.println("build process ready");
+		int mistakes = 0;
+		for(Instance instance : wekaInstances) {
+			double d  = pl.classifyInstance(instance);
+			if(instance.classValue() != d) {
+				mistakes++;
+			}
+		}
+		System.out.println("Pipeline done. This many mistakes were made:" + mistakes);
 		server.shutdown();
 	}
 }

@@ -136,6 +136,7 @@ public final class EasyClient {
 		}
 		return true;
 	}
+	
 	private String getCompositionArgsFromStringInputs(String...argNames) {
 		String comp = "";
 		int index = 1;
@@ -144,7 +145,7 @@ public final class EasyClient {
 			index++;
 		}
 		if(argNames.length == 0) {
-			comp += ","; // sqs bug
+			comp += ","; // scs bug
 		} else {
 			comp = comp.substring(1); // first comma is too much. Look at the loop
 		}

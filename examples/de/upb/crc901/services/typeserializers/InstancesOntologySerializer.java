@@ -43,7 +43,7 @@ public class InstancesOntologySerializer implements IOntologySerializer<Instance
 			int attributeCount = data.getNumberOfColumns() + 1; // the amount of attributes including the class label.
 			/* create basic attribute entries */
 			ArrayList<Attribute> attributeList = new ArrayList<>(attributeCount);
-			for (int i = 1; i <= attributeCount; i++) {
+			for (int i = 1; i < attributeCount; i++) {
 				attributeList.add(new Attribute("a" + i));
 			}
 			ArrayList<String> classes = new ArrayList<>();
@@ -56,7 +56,8 @@ public class InstancesOntologySerializer implements IOntologySerializer<Instance
 			
 			weka.core.Instances wekaInstances = new Instances("JAICore-extracted dataset", attributeList,
 					data.getNumberOfRows());
-			wekaInstances.setClassIndex(attributeCount - 1); // the last item is the class attribute.
+			wekaInstances.setClassIndex(wekaInstances.numAttributes()-1); // the last item is the class attribute.
+			
 			// take every labeled instance and put it into the wekaInstances.
 			for (jaicore.ml.interfaces.LabeledInstance<String> labeledInstance : data) {
 				double[] values = new double[attributeCount];
@@ -65,9 +66,16 @@ public class InstancesOntologySerializer implements IOntologySerializer<Instance
 				}
 				weka.core.Instance wekaInstance = new DenseInstance(1.0, values);
 				// classValue in a weka.core.Instance is the index of the class value.
-				Double classIndex = new Double(classAttribute.indexOfValue(labeledInstance.getLabel()));
+				String label = labeledInstance.getLabel();
+				Double classIndex = new Double(classAttribute.indexOfValue(label));
 				wekaInstance.setDataset(wekaInstances);
-				wekaInstance.setClassValue(classIndex);
+				try {
+
+					wekaInstance.setClassValue(classIndex);
+				} catch(Exception ex) {
+					ex.printStackTrace();
+				}
+				
 				wekaInstances.add(wekaInstance);
 			}
 			return wekaInstances;
@@ -104,7 +112,7 @@ public class InstancesOntologySerializer implements IOntologySerializer<Instance
 					if(classLabel == null) {
 						throw new RuntimeException();
 					}
-					classValues[index] = (String) classValueEnumerator.nextElement();
+					classValues[index] = classLabel;
 					index ++;
 				}
 			}
@@ -118,6 +126,7 @@ public class InstancesOntologySerializer implements IOntologySerializer<Instance
 				inst.setLabel(classValues[(int) classValue]);
 				linstances.add(inst);
 		    }
+			
 			return new JASEDataObject("LabeledInstances", linstances);
 		}
 	}

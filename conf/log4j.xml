@@ -28,8 +28,8 @@
 	    </layout>
 	</appender>
 
-	<root additivity="true">
-		<level value="INFO" />
+	<root additivity="false">
+		<level value="ERROR" />
 		<appender-ref ref="roll-by-size" />
 	</root>
     <logger name="de.upb.crc901.services.core.TimeLogger" additivity="false">
