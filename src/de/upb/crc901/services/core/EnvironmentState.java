@@ -4,7 +4,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 
 /**
  * EnvironmentState maps environment field names during an execution to their values. For example:
@@ -27,6 +26,11 @@ public final class EnvironmentState {
 	private final Map<String, JASEDataObject> envState;
 	
 	/**
+	 * Counter that indicates how many positional arguments have been added to this instance.
+	 */
+	private int positionalArgumentCounter = 1;
+	
+	/**
 	 * An empty env state.
 	 */
 	public EnvironmentState() {
@@ -41,6 +45,16 @@ public final class EnvironmentState {
 	public EnvironmentState(Map<String, JASEDataObject> startingState) {
 		startingFields = new HashSet<>(startingState.keySet()); // copy starting field names into a new set.
 		envState = new HashMap<>(startingState); // copy the given map into a new map.
+	}
+	
+	/**
+	 * Adds all added fieldnames from current env state to the starting field.
+	 * After this call addedFieldNames will return an iterable of 0 objects.
+	 */
+	public void resetStartingField() {
+		for(String fieldName : addedFieldNames()) {
+			startingFields.add(fieldName);
+		}
 	}
 	
 	/**
@@ -74,25 +88,153 @@ public final class EnvironmentState {
 	
 	/**
 	 * Returns an iterable object of all field name that were added to this state after it's creation.
-	 * @return
 	 */
 	public Iterable<String> addedFieldNames(){
 		// return a anonymous sub type of Iterable that returns FileteredIterator in its 'iterator()' method.
-		return () -> { 
-			return new FilteredIterator<String>(
+		return () ->  
+				new FilteredIterator<String>(
 					currentFieldNames().iterator(),  	// iterator of all current fieldnames
 					(s -> !containedAtStart(s))); 		// filter out every fieldname that was contained at start.
+		
+	}
+	
+	/**
+	 * Returns an iterable object of all field name that are index fields, like : "$1", "$2", ...
+	 */
+	public Iterable<String> positionalFieldNames() {
+		return () -> {
+				return new FilteredIterator<String>(
+					currentFieldNames().iterator(),  	// iterator of all current fieldnames
+					(s -> isIndexField(s))); 			// filter out every fieldname that was is not a index field.
 		};
 	}
+
+	/**
+	 * Returns an iterable object of all field name that are not index fields, unlike : "$1", "$2", ...
+	 */
+	public Iterable<String> keywordFieldNames(){
+		return () ->
+				new FilteredIterator<String>(
+					currentFieldNames().iterator(),  	// iterator of all current fieldnames
+					(s -> !isIndexField(s))); 			// filter out every fieldname that was is a index field.
+	}
+	
+	/**
+	 * Returns an iterable object of all field name that are not index fields, unlike : "$1", "$2", ...
+	 */
+	public Iterable<String> serviceHandleFieldNames(){
+		return () ->
+				new FilteredIterator<String>(
+					currentFieldNames().iterator(),  	// iterator of all current fieldnames
+					(s -> retrieveField(s).getData() instanceof ServiceHandle )); 			// filter out every fieldname that was is a index field.
+	}
+	
+	
 	
 	/**
 	 * Adds the given JASEDataObject to the state with the given field name.
 	 */
 	public void addField(String newFieldName, JASEDataObject newVar) {
-		envState.put(newFieldName, newVar);
+		if(isIndexField(newFieldName)) { // a positional field is trying to be added:
+			int index = indexFromField(newFieldName);
+			if(index<=0) {
+				throw new RuntimeException("Index: " + index + " not allowed.");
+			}
+			setPositionalField(index, newVar);
+		}else {
+			envState.put(newFieldName, newVar);
+		}
 	}
 	
+	/**
+	 * Returns the variable mapped by the envState with the given field name.
+	 */
+	public JASEDataObject retrieveField(String fieldName) {
+		return envState.get(fieldName);
+	}
+
+	public void appendField(JASEDataObject newVar) {
+		positionalArgumentCounter++; // one more argument that was added.
+		setPositionalField(positionalArgumentCounter-1, newVar);
+	}
 	
+	public void setPositionalField(int index, JASEDataObject newVar) {
+		while(positionalArgumentCounter < index) {
+			positionalArgumentCounter++;
+		}
+		envState.put(indexToField(index), newVar);
+	}
 	
-	
+	public String indexToField(int index) {
+		return "i" + index;
+	}
+	public int indexFromField(String indexField) {
+		if(isIndexField(indexField)) {
+			return Integer.parseInt(indexField.substring(1));
+		}else {
+			throw new RuntimeException("Can't translate " + indexField + " to index.");
+		}
+	}
+	public boolean isIndexField(String field) {
+		return field.matches("^i\\d+$");
+	}
+
+	/* (non-Javadoc)
+	 * @see java.lang.Object#hashCode()
+	 */
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + ((envState == null) ? 0 : envState.hashCode());
+		result = prime * result + positionalArgumentCounter;
+		result = prime * result + ((startingFields == null) ? 0 : startingFields.hashCode());
+		return result;
+	}
+
+	/* (non-Javadoc)
+	 * @see java.lang.Object#equals(java.lang.Object)
+	 */
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+		if (obj == null) {
+			return false;
+		}
+		if (!(obj instanceof EnvironmentState)) {
+			return false;
+		}
+		EnvironmentState other = (EnvironmentState) obj;
+		if (envState == null) {
+			if (other.envState != null) {
+				return false;
+			}
+		} else if (!envState.equals(other.envState)) {
+			return false;
+		}
+		if (positionalArgumentCounter != other.positionalArgumentCounter) {
+			return false;
+		}
+		if (startingFields == null) {
+			if (other.startingFields != null) {
+				return false;
+			}
+		} else if (!startingFields.equals(other.startingFields)) {
+			return false;
+		}
+		return true;
+	}
+
+	public Map<String, JASEDataObject> getCurrentMap() {
+		return envState;
+	}
+
+	public void extendBy(HashMap<String, JASEDataObject> map) {
+		for(String keyString : map.keySet()) {
+			addField(keyString, map.get(keyString));
+		}
+	}
+
 }

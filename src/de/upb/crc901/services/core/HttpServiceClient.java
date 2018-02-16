@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Collection;
 import java.util.HashMap;
@@ -51,6 +52,54 @@ public class HttpServiceClient {
 		this.otms = otms;
 		
 	}
+	public ServiceCompositionResult sendCompositionRequest(String host, HttpBody body) throws IOException {
+		// use choreography specific url
+		return sendRequest(host, "choreography", body);
+	}
+
+	public ServiceCompositionResult sendRequest(String host, String operation, HttpBody body) throws IOException {
+		URL url = new URL("http://" + host + "/" + operation);
+		translateServiceHandlersRemoteToLocal(body.getState(), host);
+		HttpURLConnection con = (HttpURLConnection) url.openConnection();
+		con.setChunkedStreamingMode(10000);
+		con.setRequestMethod("POST");
+		con.setDoOutput(true);
+		TimeLogger.STOP_TIME("Sending data started");
+		/* send data */
+		OutputStream out = con.getOutputStream();
+		body.writeBody(out);
+		TimeLogger.STOP_TIME("Sending data concluded");
+		out.close();
+		HttpBody returnedBody = new HttpBody();
+		/* read and return answer */
+		try (InputStream in = con.getInputStream()){
+			returnedBody.readfromBody(in);
+		}catch(IOException ex) {
+			ex.printStackTrace();
+		}
+		catch(Exception ex) {
+			ex.printStackTrace();
+		}
+		ServiceCompositionResult result = new ServiceCompositionResult();
+		result.addBody(returnedBody, host);
+		return result;
+	}
+	
+	public void translateServiceHandlersRemoteToLocal(EnvironmentState envState, String hostsToChange) {
+		for(String field : envState.serviceHandleFieldNames()) {
+			
+			ServiceHandle serviceHandle = (ServiceHandle) envState.
+											retrieveField(field).getData();
+			if(!serviceHandle.getHost().equals(hostsToChange)) {
+				continue;
+			}
+			serviceHandle = serviceHandle.withLocalHost();
+			envState.addField(field, 
+					new JASEDataObject
+					(ServiceHandle.class.getSimpleName(), serviceHandle));
+			
+		}
+	}
 
 	public ServiceCompositionResult callServiceOperation(String serviceCall, Object... inputs) throws IOException {
 		return callServiceOperation(ServiceUtil.getOperationInvocation(serviceCall, inputs), new SequentialComposition(new CompositionDomain()), inputs);
@@ -66,12 +115,7 @@ public class HttpServiceClient {
 	}
 
 	public ServiceCompositionResult callServiceOperation(OperationInvocation call, SequentialComposition coreography, Map<String, Object> additionalInputs) throws IOException {
-		/* separate service and operation from name */
-		String opFQName = call.getOperation().getName();
-		String[] hostservice_OpTupel = opFQName.split("::", 2);
-		// split the opFQName into service (classpath or objectname) and operation name (function name).
-
-
+		
 		/* prepare data */
 		// TODO coreography should have a indexof method
 		int index = 0;
@@ -102,50 +146,40 @@ public class HttpServiceClient {
 		}
 
 		/* setup connection */
+		
+		/* separate service and operation from name */
+		String opFQName = call.getOperation().getName();
+		String[] hostservice_OpTupel = opFQName.split("::", 2);
+		// split the opFQName into service (classpath or objectname) and operation name (function name).
+
+
 		String host;
 		URL url;
 		if(serializedCoreography != null) {
 			String serviceKey = hostservice_OpTupel[0];
-			if (!additionalInputs.containsKey(serviceKey))
+			if(serviceKey.contains("/")) {
+				String[] host_serviceTupel = hostservice_OpTupel[0].split("/",2);
+				host = host_serviceTupel[0]; // hostname e.g.: 'localhost:5000'
+			}
+			else if (!additionalInputs.containsKey(serviceKey)) {
 				throw new IllegalArgumentException("Want to execute composition with first service being " + serviceKey + ", but no service handle is given in the additional inputs.");
-			// If it's a choreography, use choreography specific url
-			ServiceHandle handle = (ServiceHandle)additionalInputs.get(serviceKey);
-			host = handle.getHost();
-			url = new URL("http://" + host + "/" + "choreography");
+			}
+			else{ 
+				ServiceHandle handle = (ServiceHandle)additionalInputs.get(serviceKey);
+				host = handle.getHost();
+			}
+			return sendCompositionRequest(host, body);
 		}
 		else {
-			
 			String[] host_serviceTupel = hostservice_OpTupel[0].split("/",2);
 			host = host_serviceTupel[0]; // hostname e.g.: 'localhost:5000'
 			String service = host_serviceTupel[1]; // service name e.g.: 'packagePath.Constructor'
 			// If no '::' is given, assume its a '__construct' call.
 			String opName = hostservice_OpTupel.length>1 ? hostservice_OpTupel[1] : "__construct";
-			url = new URL("http://" + host + "/" + service + "/" + opName);
+			return sendRequest(host, service + "/" + opName, body);
 		}
-		HttpURLConnection con = (HttpURLConnection) url.openConnection();
-		con.setChunkedStreamingMode(100000);
-		con.setRequestMethod("POST");
-		con.setDoOutput(true);
-		TimeLogger.STOP_TIME("Sending data started");
-		/* send data */
-		OutputStream out = con.getOutputStream();
-		body.writeBody(out);
-		TimeLogger.STOP_TIME("Sending data concluded");
-		out.close();
-		HttpBody returnedBody = new HttpBody();
-		/* read and return answer */
-		try (InputStream in = con.getInputStream()){
-			returnedBody.readfromBody(in);
-		}catch(IOException ex) {
-			ex.printStackTrace();
-		}
-		catch(Exception ex) {
-			ex.printStackTrace();
-		}
-		ServiceCompositionResult result = new ServiceCompositionResult();
-		result.addBody(returnedBody, host);
-		return result;
 	}
+	
 
 	public ServiceCompositionResult invokeServiceComposition(SequentialComposition composition, Map<String, Object> inputs) throws IOException {
 

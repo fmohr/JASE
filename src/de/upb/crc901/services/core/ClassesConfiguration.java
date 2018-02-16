@@ -182,6 +182,10 @@ public class ClassesConfiguration extends HashMap<String, JsonNode> {
 		if(!classknown(classpath)) {
 			return false;
 		}
+		if("__construct".equals(methodName)) {
+			// constructor is known.
+			return true;
+		}
 		if(isWrapped(classpath)) {
 			// first look at the wrapper
 			String wrapperPath = getWrapperClasspath(classpath);
@@ -234,6 +238,9 @@ public class ClassesConfiguration extends HashMap<String, JsonNode> {
 	public Map<String, String> getMethodResultMap(String classpath, String methodName) {
 		if(!methodKnown(classpath, methodName)) {
 			throw new RuntimeException("The classpath: " + classpath + " and method: " + methodName + " are not known.");
+		}
+		if("__construct".equals(methodName)) {
+			return getStandardResultMap();
 		}
 		JsonNode classConfig = getClassConfiguration(classpath);
 		if (classConfig.has("methods")) {

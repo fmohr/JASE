@@ -91,7 +91,7 @@ public class ExchangeTest {
 		body.setComposition("something");
 		body.setCurrentIndex(2);
 		body.addKeyworkArgument("a", new JASEDataObject("Instances", instances));
-		body.addUnparsedKeywordArgument(null, "i1",1);
+		body.addUnparsedKeywordArgument("i1",1);
 		body.addPositionalArgument(new JASEDataObject("LabeledInstances", linstances));
 		
 		body.writeBody(System.out);
@@ -117,7 +117,7 @@ public class ExchangeTest {
 		// write to a ByteArrayOutputStream
 
 		HttpBody body = new HttpBody();
-		body.addUnparsedKeywordArgument(otms, "a", wekaInstances);
+		body.addUnparsedKeywordArgument("a", wekaInstances);
 		TimeLogger.STOP_TIME("Parsing to labeledinstaces took");
 		ByteArrayOutputStream stringOutStream = new ByteArrayOutputStream();
 		body.writeBody(stringOutStream);

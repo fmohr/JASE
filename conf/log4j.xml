@@ -28,12 +28,12 @@
 	    </layout>
 	</appender>
 
-	<root additivity="false">
-		<level value="DEBUG" />
+	<root additivity="true">
+		<level value="INFO" />
 		<appender-ref ref="roll-by-size" />
 	</root>
     <logger name="de.upb.crc901.services.core.TimeLogger" additivity="false">
-        <level value="DEBUG"/>
+        <level value="INFO"/>
         <appender-ref ref="timeappender"/>
     </logger>
 </log4j:configuration>

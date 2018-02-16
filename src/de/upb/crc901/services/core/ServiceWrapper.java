@@ -3,6 +3,8 @@ package de.upb.crc901.services.core;
 import java.io.Serializable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Base class of wrappers. 
@@ -59,7 +61,9 @@ public abstract class ServiceWrapper implements Serializable{
 		try {
 			// check if the constructor together with the values are not null.
 			if(delegateConstructor != null && constructorValues != null) {
-				delegate = this.delegateConstructor.newInstance(this.constructorValues);
+				List<?> list = Arrays.asList(constructorValues);
+				Object[] parsed = new OntologicalTypeMarshallingSystem().objectArrayFromSemantic(delegateConstructor.getParameterTypes(), (List<JASEDataObject>) list);
+				delegate = this.delegateConstructor.newInstance(parsed);
 			}
 		} catch (InstantiationException | IllegalAccessException | IllegalArgumentException
 				| InvocationTargetException e) {

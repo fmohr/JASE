@@ -36,6 +36,7 @@ import java.util.Random;
 
 import javax.swing.JOptionPane;
 
+import org.apache.commons.lang3.math.NumberUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -108,7 +109,8 @@ public class ExampleTester {
 		int mistakes = 0;
 		for (Instance i : split.get(1)) {
 			ServiceCompositionResult resource = client.callServiceOperation(serviceAddress + "::classifyInstance", i);
-			double prediction =  (double) resource.get("out").getData();
+			
+			float prediction = (float) (resource.get("out").getData());
 			if (prediction != i.classValue())
 				mistakes++;
 		}
@@ -138,7 +140,7 @@ public class ExampleTester {
 		
 	}
 
-//	@Test
+	@Test
 	public void testImageProcessor() throws Exception {
 
 		/* create new classifier */

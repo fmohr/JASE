@@ -29,18 +29,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 public class ServiceCompositionResult extends HashMap<String, JASEDataObject> {
 
 	public void addBody(HttpBody returnedBody, String host) {
-		for(String keyword : returnedBody.getKeyworkArgs().keySet()) {
-			JASEDataObject jdo = returnedBody.getKeyworkArgs().get(keyword);
+		for(String field : returnedBody.getState().currentFieldNames()) {
+			JASEDataObject jdo = returnedBody.getState().retrieveField(field);
 			jdo = rewriteHosts(jdo, host);
-			super.put(keyword, jdo);
+			super.put(field, jdo);
 		}
-		int index = 1;
-		for(JASEDataObject jdo :  returnedBody.getPositionalArgs()) {
-			jdo = rewriteHosts(jdo, host);
-			super.put("i" + index, jdo);
-			index++;
-		}
-
 	}
 	/**
 	 * Rewrite the 'host' attribute for all servicehandlers whose host was "local".

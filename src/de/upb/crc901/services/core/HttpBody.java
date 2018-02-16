@@ -3,13 +3,8 @@ package de.upb.crc901.services.core;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.UnsupportedEncodingException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 import org.apache.commons.lang3.reflect.MethodUtils;
 
@@ -18,8 +13,6 @@ import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import de.upb.crc901.configurationsetting.operation.OperationInvocation;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
@@ -48,13 +41,26 @@ public final class HttpBody {
 
 	private static final String ARGLIST_FIELDNAME = "$arg_list$";
 	
-	public static final String PRIMITIVE_TYPE = "primitive";
 	
 	private String composition = null;
 	private int currentIndex = 0;
 	private int maxIndex = -1;
-	private List<JASEDataObject> positionalArguments = new ArrayList<>();
-	private Map<String, JASEDataObject> keywordArguments = new HashMap<>();
+	private EnvironmentState envState = new EnvironmentState();
+	
+	private OntologicalTypeMarshallingSystem otms = new OntologicalTypeMarshallingSystem();
+	
+	
+
+	public HttpBody(){
+		
+	}
+	
+	public HttpBody(EnvironmentState envState, String chorepgraphy, int currentIndex, int maxindex) {
+		this.envState = envState;
+		this.composition = chorepgraphy;
+		this.currentIndex = currentIndex;
+		this.maxIndex = maxindex;
+	}
 	
 	
 	/**
@@ -94,77 +100,49 @@ public final class HttpBody {
 		this.maxIndex = maxIndex;
 	}
 	
-	public HttpBody(){
-		
-	}
-	
-	public HttpBody(Map<String, JASEDataObject> inputs, List<JASEDataObject> listInputs, String chorepgraphy, int currentIndex, int maxindex) {
-		this.keywordArguments = inputs;
-		this.positionalArguments = listInputs;
-		this.composition = chorepgraphy;
-		this.currentIndex = currentIndex;
-		this.maxIndex = maxindex;
-	}
-	
 	public void addKeyworkArgument(String name, JASEDataObject data) {
-		keywordArguments.put(name, data);
+		envState.addField(name, data);
 	}
 	
 	public void addPositionalArgument(JASEDataObject data) {
-		positionalArguments.add(data);
+		envState.appendField(data);
 	}
 	
-	public void addUnparsedKeywordArgument(OntologicalTypeMarshallingSystem otms, String name, Object o) {
-		addKeyworkArgument(name, parseToSemanticObject(otms, o));
+	public void addUnparsedKeywordArgument(String name, Object o) {
+		addKeyworkArgument(name, otms.allToSemantic(o, false));
 	}
 	
-	public void addUnparsedPositionalArgument(OntologicalTypeMarshallingSystem otms, Object o) {
+	public void addUnparsedPositionalArgument(Object o) {
 		
-		addPositionalArgument(parseToSemanticObject(otms, o));
+		addPositionalArgument(otms.allToSemantic(o, false));
 	}
 	
-	private JASEDataObject parseToSemanticObject(OntologicalTypeMarshallingSystem otms, Object o) {
-		
-		if(isPrimitive(o)) {
-			// unparsed
-			JASEDataObject jdo = new JASEDataObject(PRIMITIVE_TYPE, o);
-			return jdo;
-		}else {
-			return otms.objectToSemantic(o);
-		}
-	}
+	
 	
 	
 	/**
 	 * Parses the contained composition to SequentialComposition.
 	 * @return a SequentialComposition object. 
 	 */
-	public SequentialComposition getSequentialComposition() {
+	public SequentialCompositionCollection parseSequentialComposition() {
 		SequentialCompositionSerializer scs = new SequentialCompositionSerializer();
 		// TODO workaround because bug in scs. remove the replacement after the bug is fixed:
 		String composition = getComposition();
 		composition = composition.replaceAll("\\(\\{\\}\\)", "({,})"); // add comma to empty inputs
 		// end of workaround
-		return scs.readComposition(composition);
+		SequentialComposition sc =  scs.readComposition(composition);
+		SequentialCompositionCollection scc = new SequentialCompositionCollection(sc);
+		return scc;
 	}
+
 	
 	/**
 	 * Returns the operation in position index from parsedCompositionField.
 	 * @param index position of operation in composition.
-	 * @return the addressed operation
+	 * @return the operation
 	 */
 	public OperationInvocation getOperation(int index) {
-		for(OperationInvocation opInv : getSequentialComposition()) {
-			if(index != 0) {
-				// decrease index until it hits 0.
-				index--;
-			}
-			else {
-				// index hit 0, so this one is requested.
-				return opInv;
-			}
-		}
-		throw new ArrayIndexOutOfBoundsException("index " + index + " was asked from " + getComposition());
+		return parseSequentialComposition().get(index);
 	}
 	
 	/**
@@ -188,18 +166,10 @@ public final class HttpBody {
 	}
 
 	/**
-	 * Returns the keywork arguments.
-	 * @return Inputs
+	 * Returns the environment map
 	 */
-	public Map<String, JASEDataObject> getKeyworkArgs() {
-		return keywordArguments;
-	}
-	/**
-	 * Returns the positional arguments.
-	 * @return Inputs
-	 */
-	public List<JASEDataObject> getPositionalArgs() {
-		return positionalArguments;
+	public EnvironmentState getState() {
+		return envState;
 	}
 	
 	/**
@@ -227,14 +197,14 @@ public final class HttpBody {
 		// positional arguments
 		jsonOut.writeFieldName(HttpBody.ARGLIST_FIELDNAME);
 		jsonOut.writeStartArray();
-		for(int i = 0, size = getPositionalArgs().size(); i < size; i++) {
-			writeObject(jsonOut, getPositionalArgs().get(i));
+		for(String fieldName : getState().positionalFieldNames()) {
+			writeObject(jsonOut,  getState().retrieveField(fieldName));
 		}
 		jsonOut.writeEndArray();
 		
 		// keyword arguments
-		for(String keyword : getKeyworkArgs().keySet()) {
-			JASEDataObject data = getKeyworkArgs().get(keyword);
+		for(String keyword : getState().keywordFieldNames()) {
+			JASEDataObject data = getState().retrieveField(keyword);
 			jsonOut.writeFieldName(keyword);
 			writeObject(jsonOut, data);
 		}
@@ -251,15 +221,17 @@ public final class HttpBody {
 		jsonOut.writeStartObject();
 		jsonOut.writeStringField("type", jdo.getType());
 		jsonOut.writeFieldName("data");
-		if(isPrimitive(jdo)) {
-			jsonOut.writeObject(jdo.getData());
-		}else {
-			parseObjectAndWrite(jsonOut, jdo);
+		if(otms.isPrimitive(jdo)) { 
+			// primitive types can be written as is.
+			jsonOut.writeString(jdo.getData().toString());
+		}else { 					
+			// non-primitive types need to be transmitted using a streamhandler
+			streamObject(jsonOut, jdo);
 		}
 		jsonOut.writeEndObject();
 	}
 	
-	private void  parseObjectAndWrite(JsonGenerator jsonOut, JASEDataObject jdo) throws IOException {
+	private void  streamObject(JsonGenerator jsonOut, JASEDataObject jdo) throws IOException {
 		String streamHandlerClassName = "de.upb.crc901.services.streamhandlers." + jdo.getType() + "StreamHandler";
 		Class<?> streamHandlerClass;
 		try {
@@ -286,25 +258,7 @@ public final class HttpBody {
 		}
 	}
 
-	/**
-	 * Returns true if the given object is primitive.
-	 * 
-	 */
-	public static boolean isPrimitive(Object o) {
-		if(o instanceof JASEDataObject) {
-			return ((JASEDataObject)o).getType().equals(PRIMITIVE_TYPE);
-		}
-		if(o instanceof Number) {
-			return true;
-		}
-		if(o instanceof String) {
-			return true;
-		}
-		if(o instanceof Boolean) {
-			return true;
-		}
-		return false;
-	}
+	
 
 	/**
 	 * Encodes this instance and writes it chunk wise through the outStream.
@@ -386,20 +340,9 @@ public final class HttpBody {
 	}
 	
 	private Object parseData(JsonParser jsonIn, String type) throws IOException {
-		if(HttpBody.PRIMITIVE_TYPE.equals(type)) {
-			if(jsonIn.getCurrentToken() == JsonToken.VALUE_NUMBER_INT) {
-				return jsonIn.getIntValue();
-			}
-			else if (jsonIn.getCurrentToken() == JsonToken.VALUE_NUMBER_FLOAT) {
-				return jsonIn.getDoubleValue();
-			}
-			else if (jsonIn.getCurrentToken() == JsonToken.VALUE_STRING) {
-				return jsonIn.getValueAsString();
-			}
-			else {
-				throw new RuntimeException("Can't parse this token to primitive type");
-			}
-		}else {
+		if(otms.isPrimitiveType(type)) {
+			return otms.primitiveToSemanticAsString(jsonIn.getValueAsString()).getData();
+		} else {
 			try {
 				String streamHandlerClassName = "de.upb.crc901.services.streamhandlers." + type + "StreamHandler";
 				Class<?> streamHandlerClass = Class.forName(streamHandlerClassName);
@@ -444,10 +387,7 @@ public final class HttpBody {
 		if(getMaxIndex() != otherBody.getMaxIndex()) {
 			return false;
 		}
-		if(!getPositionalArgs().equals(otherBody.getPositionalArgs())){
-			return false;
-		}
-		if(!getKeyworkArgs().equals(otherBody.getKeyworkArgs())){
+		if(!getState().equals(otherBody.getState())){
 			return false;
 		}
 		return true;

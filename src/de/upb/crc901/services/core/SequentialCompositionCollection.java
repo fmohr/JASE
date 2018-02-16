@@ -31,6 +31,13 @@ public class SequentialCompositionCollection extends SequentialComposition imple
 		}
 	}
 
+	public SequentialCompositionCollection(SequentialComposition sc) {
+		this(new CompositionDomain());
+		for(OperationInvocation op : sc) {
+			add(op);
+		}
+	}
+
 	@Override
 	public boolean isEmpty() {
 		return innerList.isEmpty();

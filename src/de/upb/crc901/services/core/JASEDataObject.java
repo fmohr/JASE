@@ -1,17 +1,13 @@
 package de.upb.crc901.services.core;
 
-import java.util.List;
-
-import com.fasterxml.jackson.databind.JsonNode;
-
 public class JASEDataObject {
 	private final String type;
 	private final Object object;
 
 	public JASEDataObject(String type, Object object) {
 		super();
-		this.type = type;
-		this.object = object;
+		this.type = java.util.Objects.requireNonNull(type);
+		this.object = java.util.Objects.requireNonNull(object);
 	}
 
 	public String getType() {
@@ -58,11 +54,5 @@ public class JASEDataObject {
 		return type + ": " + object.toString();
 	}
 	
-
-//	public static final JASEDataObject FROM_JSON(JsonNode json) {
-//		JsonNode object = json.get("data");
-//		String type = json.get("type").asText();
-//		return new JASEDataObject(type, object);
-//	}
 
 }
