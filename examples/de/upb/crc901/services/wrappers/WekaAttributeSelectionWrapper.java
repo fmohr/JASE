@@ -45,6 +45,16 @@ public class WekaAttributeSelectionWrapper extends ServiceWrapper {
 		return ((AttributeSelection)delegate).reduceDimensionality(instance);
 	}
 	
+	public Instances reduceDimensionality(Instances instances) throws Exception {
+		if(cachedInstances==null) {
+			throw new RuntimeException("First call SelectAttribute");
+		}
+		for(Instance instance : instances) {
+			instance.setDataset(cachedInstances);
+		}
+		return ((AttributeSelection)delegate).reduceDimensionality(instances);
+	}
+	
 	protected void buildDelegate() {
 		if(constructorValues.length != 2) {
 			throw new RuntimeException("Given length is: " +  constructorValues.length);
