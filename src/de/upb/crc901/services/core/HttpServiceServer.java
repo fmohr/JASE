@@ -62,7 +62,6 @@ import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.google.common.base.Objects;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
@@ -466,13 +465,12 @@ public class HttpServiceServer {
 				}
 			}
 			
-			String varname = outputMapping.values().iterator().next().getName();
 			if(!serializationSuccess) {
 				// serialization wasn't successful.
 				sh = sh.unsuccessedSerialize();
 			}
 			basicResult = new JASEDataObject(ServiceHandle.class.getSimpleName(), sh);
-			inputArgs = new Objects[0];
+			inputArgs = new Object[0];
 			resultKeywordMap = classesConfig.getMethodResultMap(opPieces.getClasspath(), opPieces.getMethodname());
 		} else {
 			try {
@@ -623,6 +621,7 @@ public class HttpServiceServer {
 		if (requiredTypes.length > providedTypes.size())
 			return false;
 		for (int i = 0; i < requiredTypes.length; i++) {
+			JASEDataObject providedData = providedTypes.get(i);
 			if (!otms.isLinkImplemented(providedTypes.get(i).getType(), requiredTypes[i])) {
 				logger.debug("The required type is: ", requiredTypes[i] + " but the provided one has semantic type of " + requiredTypes[i]);
 				return false;

@@ -7,10 +7,10 @@ import java.util.Collection;
 import java.util.Enumeration;
 import java.util.List;
 
+import org.apache.commons.collections4.ListUtils;
 import org.apache.commons.lang3.NotImplementedException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.Lists;
 
 import de.upb.crc901.services.ExchangeTest;
 import de.upb.crc901.services.core.IOntologySerializer;
@@ -46,7 +46,10 @@ public class InstancesOntologySerializer implements IOntologySerializer<Instance
 			for (int i = 1; i <= attributeCount; i++) {
 				attributeList.add(new Attribute("a" + i));
 			}
-			ArrayList<String> classes = Lists.newArrayList(data.getOccurringLabels());
+			ArrayList<String> classes = new ArrayList<>();
+			for(String classLabel : data.getOccurringLabels()) {
+				classes.add(classLabel);
+			}
 			Attribute classAttribute = new Attribute("label", classes);
 			
 			attributeList.add(classAttribute);
@@ -75,10 +78,9 @@ public class InstancesOntologySerializer implements IOntologySerializer<Instance
 	}
 
 	public JASEDataObject serialize(Instances wekaInstances) {
-//		TimeLogger.STOP_TIME("wekainstance -> labeledinstances with size: " + wekaInstances.size() + " started");
+		TimeLogger.STOP_TIME("wekainstance -> labeledinstances with size: " + wekaInstances.size() + " started");
 		if (wekaInstances.classIndex() < 0) {
-//			return new JASEDataObject("Instances", WekaUtil.toJAICoreInstances(wekaInstances));
-			throw new RuntimeException();
+			return new JASEDataObject("Instances", WekaUtil.toJAICoreInstances(wekaInstances));
 		}
 		else {
 			LabeledInstances<String> linstances = new SimpleLabeledInstancesImpl();
@@ -98,6 +100,10 @@ public class InstancesOntologySerializer implements IOntologySerializer<Instance
 				Enumeration<Object> classValueEnumerator = classAttribute.enumerateValues();
 				int index = 0;
 				while(classValueEnumerator.hasMoreElements()) {
+					String classLabel = (String) classValueEnumerator.nextElement();
+					if(classLabel == null) {
+						throw new RuntimeException();
+					}
 					classValues[index] = (String) classValueEnumerator.nextElement();
 					index ++;
 				}
