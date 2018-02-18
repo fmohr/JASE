@@ -40,7 +40,6 @@ import de.upb.crc901.configurationsetting.logic.LiteralParam;
 import de.upb.crc901.configurationsetting.operation.OperationInvocation;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
 import de.upb.crc901.configurationsetting.serialization.SequentialCompositionSerializer;
-import de.upb.crc901.services.ExchangeTest;
 import weka.filters.unsupervised.attribute.AddUserFields;
 
 public class HttpServiceClient {
@@ -61,7 +60,7 @@ public class HttpServiceClient {
 		URL url = new URL("http://" + host + "/" + operation);
 		translateServiceHandlersRemoteToLocal(body.getState(), host);
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
-		con.setChunkedStreamingMode(10000);
+		con.setChunkedStreamingMode(100000);
 		con.setRequestMethod("POST");
 		con.setDoOutput(true);
 		TimeLogger.STOP_TIME("Sending data started");
@@ -72,17 +71,22 @@ public class HttpServiceClient {
 		out.close();
 		HttpBody returnedBody = new HttpBody();
 		/* read and return answer */
-		try (InputStream in = con.getInputStream()){
-			returnedBody.readfromBody(in);
-		}catch(IOException ex) {
-			ex.printStackTrace();
+		int responseCode = con.getResponseCode();
+		if(responseCode == 200) {
+			try (InputStream in = con.getInputStream()){
+				returnedBody.readfromBody(in);
+			}catch(IOException ex) {
+				ex.printStackTrace();
+			}
+			catch(Exception ex) {
+				ex.printStackTrace();
+			}
+			ServiceCompositionResult result = new ServiceCompositionResult();
+			result.addBody(returnedBody, host);
+			return result;
+		} else {
+			return null; // TODO correct error handling
 		}
-		catch(Exception ex) {
-			ex.printStackTrace();
-		}
-		ServiceCompositionResult result = new ServiceCompositionResult();
-		result.addBody(returnedBody, host);
-		return result;
 	}
 	
 	public void translateServiceHandlersRemoteToLocal(EnvironmentState envState, String hostsToChange) {

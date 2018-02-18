@@ -73,7 +73,6 @@ import de.upb.crc901.configurationsetting.operation.Operation;
 import de.upb.crc901.configurationsetting.operation.OperationInvocation;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
 import de.upb.crc901.configurationsetting.serialization.SequentialCompositionSerializer;
-import de.upb.crc901.services.wrappers.WekaClassifierWrapper;
 import jaicore.basic.FileUtil;
 import weka.core.Instance;
 
@@ -255,11 +254,14 @@ public class HttpServiceServer {
 			} catch (Throwable e) {
 				e.printStackTrace();
 			} finally {
-				t.sendResponseHeaders(200, 0);
-				OutputStream os = t.getResponseBody();
+				OutputStream os;
 				if(returnBody!=null) {
+					t.sendResponseHeaders(200, 0);
+					os = t.getResponseBody();
 					returnBody.writeBody(os);
 				}else {
+					t.sendResponseHeaders(400, 0);
+					os = t.getResponseBody();
 					os.write(response.getBytes());
 					os.flush();
 				}

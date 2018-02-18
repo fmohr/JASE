@@ -231,15 +231,15 @@ public class OntologicalTypeMarshallingSystem {
 			if(jdo.getType().equals(NUMBER_TYPE)) {
 				Number numbervalue = (Number)o;
 				if(Float.class.isAssignableFrom(clazz) || clazz.getName().equals("float")) {
-					return (T) new Float(numbervalue.floatValue());
+					return (T) new Double(numbervalue.floatValue());
 				}else if(Double.class.isAssignableFrom(clazz) || clazz.getName().equals("double")) {
 					return (T) new Double(numbervalue.doubleValue());
 				}else if(Integer.class.isAssignableFrom(clazz) || clazz.getName().equals("int")) {
 					return (T) new Integer(numbervalue.intValue());
 				}else if(Byte.class.isAssignableFrom(clazz) || clazz.getName().equals("byte")) {
-					return (T) new Byte(numbervalue.byteValue());
+					return (T) new Integer(numbervalue.byteValue());
 				}else if(Short.class.isAssignableFrom(clazz) || clazz.getName().equals("short")) {
-					return (T) new Short(numbervalue.shortValue());
+					return (T) new Integer(numbervalue.shortValue());
 				}else if(Long.class.isAssignableFrom(clazz) || clazz.getName().equals("long")) {
 					return (T) new Long(numbervalue.longValue());
 				} 

@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -21,7 +22,9 @@ import de.upb.crc901.services.core.HttpServiceServer;
 import de.upb.crc901.services.core.OntologicalTypeMarshallingSystem;
 import de.upb.crc901.services.core.ServiceCompositionResult;
 import de.upb.crc901.services.core.ServiceHandle;
+import de.upb.crc901.services.mlpipeline.MLServicePipeline;
 import jaicore.ml.WekaUtil;
+import weka.core.Instance;
 import weka.core.Instances;
 
 /**
@@ -87,24 +90,34 @@ public class WekaConfigTests {
 		Set<String> errorSet = new HashSet<>();
 		for(String wekaClassifierClasspath : server.getClassesConfig().allSubconfigs(baseClassifierConfigName)) {
 			try {
-				// Create classifier service
-				ServiceHandle service = (ServiceHandle) client.callServiceOperation(
-							"localhost:" + PORT + "/" + wekaClassifierClasspath + "::__construct")
-								.get("out").getData();
-				Assert.assertNotNull(service.getServiceAddress());
-				// train the classifier
-				client.callServiceOperation(service.getServiceAddress() + "::train", split.get(0));
-				// evaluate the classifier
-				ServiceCompositionResult result =  client.callServiceOperation(service.getServiceAddress() + "::predict_and_score", split.get(1));
-				Double score = (Double) result.get("out").getData();
+				MLServicePipeline pl = new MLServicePipeline("localhost", PORT, wekaClassifierClasspath);
 				
-				System.out.println("Accuracy of " + wekaClassifierClasspath + ": " + score);
-			} catch (Exception ex) {
+				pl.buildClassifier(split.get(0));
+				
+				int mistakes = 0;
+				int index = 0;
+				double[] predictions = pl.classifyInstances(split.get(1));
+				for(Instance instance : split.get(1)) {
+					double prediction  = predictions[index];
+					if(instance.classValue() != prediction) {
+						mistakes++;
+					}
+					index++;
+				}
+				System.out.println("Accuracy of " + wekaClassifierClasspath + ": " + (mistakes * 1f/split.get(1).size()));
+
+			}
+			catch(ClassCastException ex) {
 				ex.printStackTrace();
 				errorSet.add(wekaClassifierClasspath);
 			}
+			catch (Exception ex) {
+//				ex.printStackTrace();
+				errorSet.add(wekaClassifierClasspath);
+			}
 		}
-		System.out.println("Error occurred with these classifiers:\n" + errorSet);
+		String errorSetPrettyPrint = errorSet.stream().collect(Collectors.joining("\n\t"));
+		System.out.println("Error occurred with these classifiers:\n\t" + errorSetPrettyPrint);
 	}
 //	@Test
 	public void testAllPreprocessors() throws IOException {

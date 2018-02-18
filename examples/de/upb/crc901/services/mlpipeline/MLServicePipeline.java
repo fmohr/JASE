@@ -48,8 +48,6 @@ public class MLServicePipeline implements Classifier {
 		}
 		preprocessor = preprocessorTmp;
 		classifier = classifierTmp;
-		System.out.println(preprocessor.getServiceAddress());
-		System.out.println(classifier.getServiceAddress());
 	}
 
 	@Override
