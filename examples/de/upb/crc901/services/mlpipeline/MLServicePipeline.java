@@ -24,23 +24,26 @@ import weka.core.Instances;
 
 public class MLServicePipeline implements Classifier {
 
-  private final List<ServiceHandle> preprocessor;
+  private final List<ServiceHandle> preprocessors;
   private final ServiceHandle classifier;
 
   Map<ServiceHandle, String> serviceHandleToVarName = new HashMap<>();
   Map<String, ServiceHandle> varNameToServiceHandle = new HashMap<>();
 
-  public MLServicePipeline(final String hostname, final int port, final String classifierName) {
+  public MLServicePipeline(final String hostname, final int port, final String classifierName, final List<String[]> preprocessors) {
     super();
 
     int varIDCounter = 1;
-    ServiceHandle preprocessorTmp = null;
     ServiceHandle classifierTmp = null;
+    this.preprocessors = new LinkedList<>();
     try {
-      preprocessorTmp = new EasyClient().withHost(hostname, port).withClassPath("weka.attributeSelection.AttributeSelection")
-          .withKeywordArgument("searcher", "weka.attributeSelection.Ranker").withKeywordArgument("eval", "weka.attributeSelection.PrincipalComponents")
-          .createService("searcher", "eval");
-      preprocessorTmp.setVariableBinding("s" + varIDCounter++);
+      for (String[] ppDef : preprocessors) {
+        ServiceHandle preprocessorTmp = null;
+        preprocessorTmp = new EasyClient().withHost(hostname, port).withClassPath(ppDef[0]).withKeywordArgument("searcher", ppDef[1]).withKeywordArgument("eval", ppDef[2])
+            .createService("searcher", "eval");
+        preprocessorTmp.setVariableBinding("s" + varIDCounter++);
+        this.preprocessors.add(preprocessorTmp);
+      }
 
       classifierTmp = new EasyClient().withHost(hostname, port).withClassPath(classifierName).createService();
       classifierTmp.setVariableBinding("s" + varIDCounter++);
@@ -48,11 +51,8 @@ public class MLServicePipeline implements Classifier {
       e.printStackTrace();
     }
 
-    this.preprocessor = new LinkedList<>();
-    this.preprocessor.add(preprocessorTmp);
-
     this.classifier = classifierTmp;
-    for (ServiceHandle preprocessor : this.preprocessor) {
+    for (ServiceHandle preprocessor : this.preprocessors) {
       System.out.println(preprocessor.getVariableBinding() + ":=" + preprocessor.getServiceAddress());
     }
     System.out.println(this.classifier.getVariableBinding() + ":=" + this.classifier.getServiceAddress());
@@ -60,11 +60,10 @@ public class MLServicePipeline implements Classifier {
 
   @Override
   public void buildClassifier(final Instances data) throws Exception {
-
     StringBuffer sb = new StringBuffer();
     int invocationNumber = 1;
     String dataVariable = "i1";
-    for (ServiceHandle preprocessor : this.preprocessor) {
+    for (ServiceHandle preprocessor : this.preprocessors) {
       sb.append("empty" + (invocationNumber++) + " = " + preprocessor.getVariableBinding() + "::" + "SelectAttributes" + "({i1=" + dataVariable + "});\n");
       String newDataVariable = "data" + (invocationNumber);
       sb.append(newDataVariable + " = " + preprocessor.getVariableBinding() + "::" + "reduceDimensionality" + "({i1 = " + dataVariable + "});\n");
@@ -73,11 +72,11 @@ public class MLServicePipeline implements Classifier {
     sb.append("empty" + (invocationNumber++) + " = " + this.classifier.getVariableBinding() + "::train({i1=" + dataVariable + "});\n");
 
     EasyClient ec = new EasyClient().withComposition(sb.toString());
-    for (ServiceHandle preprocessor : this.preprocessor) {
+    for (ServiceHandle preprocessor : this.preprocessors) {
       ec.withKeywordArgument(preprocessor.getVariableBinding(), preprocessor);
     }
     ec.withKeywordArgument(this.classifier.getVariableBinding(), this.classifier);
-    ec.withPositionalArgument(data).withService(this.preprocessor.get(0)).dispatch();
+    ec.withPositionalArgument(data).withService(this.preprocessors.get(0)).dispatch();
   }
 
   @Override
@@ -88,10 +87,24 @@ public class MLServicePipeline implements Classifier {
   }
 
   public double[] classifyInstances(final Instances instances) throws Exception {
+    StringBuffer sb = new StringBuffer();
+    int invocationNumber = 1;
+    String dataVariable = "i1";
+    for (ServiceHandle preprocessor : this.preprocessors) {
+      String newDataVariable = "data" + (invocationNumber++);
+      sb.append(newDataVariable + " = " + preprocessor.getVariableBinding() + "::" + "reduceDimensionality" + "({i1 = " + dataVariable + "});\n");
+      dataVariable = newDataVariable;
+    }
+    sb.append("predictions" + " = " + this.classifier.getVariableBinding() + "::predict({i1=" + dataVariable + "});\n");
 
-    ServiceCompositionResult result = new EasyClient().withCompositionFile("testrsc/pipeline_composition_predict.txt").withKeywordArgument("s1", this.preprocessor.get(0))
-        .withKeywordArgument("s2", this.classifier).withPositionalArgument(instances) // translates to 'i1'
-        .withService(this.preprocessor.get(0)).dispatch();
+    EasyClient ec = new EasyClient().withComposition(sb.toString());
+    for (ServiceHandle preprocessor : this.preprocessors) {
+      ec.withKeywordArgument(preprocessor.getVariableBinding(), preprocessor);
+    }
+    ec.withKeywordArgument(this.classifier.getVariableBinding(), this.classifier);
+
+    ServiceCompositionResult result = ec.withPositionalArgument(instances) // translates to 'i1'
+        .withService(this.preprocessors.get(0)).dispatch();
     List<String> predictedLabels = (List<String>) result.get("predictions").getData();
     double[] predictedIndices = new double[predictedLabels.size()];
     for (int i = 0, size = predictedIndices.length; i < size; i++) {
@@ -115,7 +128,12 @@ public class MLServicePipeline implements Classifier {
   public static void main(final String[] args) throws Throwable {
     int port = 8000;
     HttpServiceServer server = new HttpServiceServer(port);
-    MLServicePipeline pl = new MLServicePipeline("localhost", port, "weka.classifiers.lazy.IBk");
+    List<String[]> preprocessors = new LinkedList<>();
+    preprocessors.add(new String[] { "weka.attributeSelection.AttributeSelection", "weka.attributeSelection.Ranker", "weka.attributeSelection.PrincipalComponents" });
+    preprocessors.add(new String[] { "weka.attributeSelection.AttributeSelection", "weka.attributeSelection.Ranker", "weka.attributeSelection.PrincipalComponents" });
+    preprocessors.add(new String[] { "weka.attributeSelection.AttributeSelection", "weka.attributeSelection.Ranker", "weka.attributeSelection.PrincipalComponents" });
+
+    MLServicePipeline pl = new MLServicePipeline("localhost", port, "weka.classifiers.lazy.IBk", preprocessors);
 
     Instances wekaInstances = new Instances(
         new BufferedReader(new FileReader("../CrcTaskBasedConfigurator/testrsc" + File.separator + "polychotomous" + File.separator + "audiology.arff")));
