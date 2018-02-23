@@ -36,7 +36,7 @@ public class MLServicePipeline implements Classifier {
 	private final String classifierFieldName;
 
 	public MLServicePipeline(final String hostname, final int port,
-			final String classifierName, final List<String[]> preprocessors) {
+			final String classifierName, final List<String[]> preprocessors, Object...classifierArgs) {
 		super();
 
 		int varIDCounter = 1;
@@ -62,11 +62,23 @@ public class MLServicePipeline implements Classifier {
 			varIDCounter++;
 		}
 		this.classifierFieldName = "s" + varIDCounter;
+		String[] classifierArgNames = new String[classifierArgs.length];
+		
+		
+		 constructorEC.withHost("131.234.73.81", 5000); //uncomment to specify pase host here: TODO 
+		int argIndex = 0;
+		for(Object classifierArg : classifierArgs) {
+			String fieldname = "classifierArg" + argIndex;
+			constructorEC.withKeywordArgument(fieldname, classifierArg);
+			classifierArgNames[argIndex] = fieldname;
+			argIndex++;
+		}
 		constructorEC.withAddedConstructOperation(classifierFieldName, // output field name of the created servicehandle
-				classifierName // classpath of the classifier
-		); // no args for the classifier construct
+				classifierName, // classpath of the classifier
+				classifierArgNames); // no args for the classifier construct
 
 		try {
+			constructorEC.withHost(hostname, port);
 			// send server request:
 			System.out.println("Sending the following construct composition:\n " + constructorEC.getCurrentCompositionText());
 			ServiceCompositionResult result = constructorEC.dispatch(); 
@@ -214,7 +226,7 @@ public class MLServicePipeline implements Classifier {
 					+ preprocessors.size() + " many preprocessors.");
 			
 			MLServicePipeline pl = new MLServicePipeline("localhost", port,
-					"weka.classifiers.trees.RandomForest", preprocessors);
+					"tflib.NeuralNet", preprocessors, 2);
 
 			Instances wekaInstances = new Instances(new BufferedReader(
 					new FileReader("../CrcTaskBasedConfigurator/testrsc"
