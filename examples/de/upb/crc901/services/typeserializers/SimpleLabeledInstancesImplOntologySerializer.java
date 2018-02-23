@@ -11,26 +11,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import de.upb.crc901.services.core.IOntologySerializer;
 import de.upb.crc901.services.core.JASEDataObject;
 import jaicore.ml.core.SimpleLabeledInstancesImpl;
+import jaicore.ml.interfaces.LabeledInstances;
 
-public class SimpleLabeledInstancesImplOntologySerializer implements IOntologySerializer<SimpleLabeledInstancesImpl>  {
+public class SimpleLabeledInstancesImplOntologySerializer implements IOntologySerializer<LabeledInstances<String>>  {
 
 	private static final List<String> supportedTypes = Arrays.asList(new String[] {"LabeledInstances"});
 	
-	public SimpleLabeledInstancesImpl unserialize(final JASEDataObject json) {
-		SimpleLabeledInstancesImpl data = new SimpleLabeledInstancesImpl(json.getObject());
-		return data;
+	public LabeledInstances<String> unserialize(final JASEDataObject jdo) {
+		return (LabeledInstances<String>) jdo.getData();
 	}
 
-	public JASEDataObject serialize(final SimpleLabeledInstancesImpl instances) {
-		try {
-			JsonNode object = (new ObjectMapper().readTree(instances.toJson()));
-			String type = "Instances";
-			JASEDataObject jdo = new JASEDataObject(type, object);
-			return jdo;
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		return null;
+	public JASEDataObject serialize(final LabeledInstances<String> linstances) {
+		String type = "LabeledInstances";
+		JASEDataObject jdo = new JASEDataObject(type, linstances);
+		return jdo;
 	}
 	
 	public Collection<String> getSupportedSemanticTypes(){

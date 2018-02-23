@@ -1,0 +1,3 @@
+empty = s1::SelectAttributes({i1=i1});
+data = s1::reduceDimensionality({i1=i1});
+empty = s2::train({i1=data});

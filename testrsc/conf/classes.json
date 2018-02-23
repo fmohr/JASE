@@ -1,11 +1,16 @@
 {
     "de.upb.crc901.services.wrappers.WekaClassifierWrapper":{
-        "methods": ["declare_classes", "train", "predict", "predict_and_score"]
+        "methods": {
+            "declare_classes" : {}, 
+            "train" : {}, 
+            "predict" : {}, 
+            "predict_and_score":{}
+        }
     },
 
     "$base_weka_classifier_config$":{
         "wrapper" : "de.upb.crc901.services.wrappers.WekaClassifierWrapper",
-        "methods": ["classifyInstance"]
+        "methods": {"classifyInstance" : {}}
     },
 
     "weka.classifiers.bayes.BayesNet" : {
@@ -160,7 +165,7 @@
     },
 
     "de.upb.crc901.services.wrappers.WekaFilterWrapper" : {
-        "methods" : ["preprocess"]
+        "methods" : {"preprocess":{}}
     }, 
     "$base_weka_filter_config$" : {
         "wrapper" : "de.upb.crc901.services.wrappers.WekaFilterWrapper",
@@ -173,10 +178,13 @@
         "extends" : ["$base_weka_filter_config$"]
     },
 
-
+    "de.upb.crc901.services.wrappers.WekaAttributeSelectionWrapper":{
+        "methods" : ["SelectAttributes", "reduceDimensionality"]
+    },
 
     "$base_weka_attributeselection_config$" : {
-        "extends" : ["$base_weka_preprocessor_config$"]
+        "extends" : ["$base_weka_preprocessor_config$"],
+        "wrapper" : "de.upb.crc901.services.wrappers.WekaAttributeSelectionWrapper"
     },
     "weka.attributeSelection.BestFirst" : {
         "extends" : ["$base_weka_attributeselection_config$"]
@@ -185,6 +193,9 @@
         "extends" : ["$base_weka_attributeselection_config$"]
     },
     "weka.attributeSelection.Ranker" : {
+        "extends" : ["$base_weka_attributeselection_config$"]
+    },
+    "weka.attributeSelection.PrincipalComponents": {
         "extends" : ["$base_weka_attributeselection_config$"]
     },
     "weka.attributeSelection.AttributeSelection" : {

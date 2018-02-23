@@ -25,40 +25,23 @@ public class ArrayListOntologySerializer implements IOntologySerializer<ArrayLis
 	private static final List<String> supportedTypes = Arrays.asList(new String[] {"StringList"});
 	
 	@Override
-	public ArrayList<String> unserialize(JASEDataObject json) {
-		if(json.getObject().isArray()) {
+	public ArrayList<String> unserialize(JASEDataObject jdo) {
+		if(jdo.getData() instanceof List<?>) {
 			// iterate over array elements and add them into an array:
 			ArrayList<String> returnedList = new ArrayList<>();
-			for(JsonNode node : json.getObject()) {
-				if(!node.isTextual()) {
-					throw new RuntimeException("Syntx error: " + node + " isn't of type string.");
-				}
-				returnedList.add(node.asText());
-			}
+			returnedList.addAll((List<String>) jdo.getData());
 			return returnedList;
 		}
 		else {
-			// the encapsulated JSONNode object isn't an Array.
-			throw new RuntimeException("Syntx error: Type was specified to be an array but the json node isn't one.");
+			typeMismatch(jdo);
+			return null;
 		}
 		
 	}
 
 	@Override
 	public JASEDataObject serialize(ArrayList<String> list) {
-		ObjectMapper mapper = new ObjectMapper();
-		ArrayNode arrayNode = mapper.createArrayNode();
-		JASEDataObject jdo = new JASEDataObject("StringList", arrayNode);
-		for(Object o : list) {
-			String s = "\"" + o.toString() + "\"";
-			try {
-				JsonNode stringNode = mapper.readTree(s);
-				arrayNode.add(stringNode);
-			} catch (IOException e) {
-				throw new RuntimeException(e);
-			}
-			
-		}
+		JASEDataObject jdo = new JASEDataObject("StringList", list);
 		return jdo;
 	}
 

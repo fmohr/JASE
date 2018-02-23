@@ -21,31 +21,26 @@
  */
 package de.upb.crc901.services.core;
 
-import java.io.BufferedReader;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
-import java.net.URLEncoder;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.math.NumberUtils;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import de.upb.crc901.configurationsetting.compositiondomain.CompositionDomain;
 import de.upb.crc901.configurationsetting.logic.LiteralParam;
 import de.upb.crc901.configurationsetting.operation.OperationInvocation;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
 import de.upb.crc901.configurationsetting.serialization.SequentialCompositionSerializer;
+import weka.filters.unsupervised.attribute.AddUserFields;
 
 public class HttpServiceClient {
 
@@ -54,6 +49,66 @@ public class HttpServiceClient {
 	public HttpServiceClient(OntologicalTypeMarshallingSystem otms) {
 		super();
 		this.otms = otms;
+		
+	}
+	public ServiceCompositionResult sendCompositionRequest(String host, HttpBody body) throws IOException {
+		// use choreography specific url
+		return sendRequest(host, "choreography", body);
+	}
+
+	public ServiceCompositionResult sendRequest(String host, String operation, HttpBody body) throws IOException {
+		URL url = new URL("http://" + host + "/" + operation);
+		translateServiceHandlers(body.getState(), host, "local");
+		HttpURLConnection con = (HttpURLConnection) url.openConnection();
+		
+		con.setChunkedStreamingMode(4096);
+		con.setRequestProperty("Content-Type", "application/json");
+		con.setRequestMethod("POST");
+		con.setDoOutput(true);
+		TimeLogger.STOP_TIME("Sending data started");
+		/* send data */
+		OutputStream out = con.getOutputStream();
+		body.writeBody(out);
+		TimeLogger.STOP_TIME("Sending data concluded");
+		out.close();
+		HttpBody returnedBody = new HttpBody();
+		/* read and return answer */
+		int responseCode = con.getResponseCode();
+		if(responseCode == 200) {
+			try (InputStream in = con.getInputStream()){
+				returnedBody.readfromBody(in);
+			}catch(IOException ex) {
+				ex.printStackTrace();
+			}
+			catch(Exception ex) {
+				ex.printStackTrace();
+			}
+			ServiceCompositionResult result = new ServiceCompositionResult();
+			translateServiceHandlers(returnedBody.getState(), "local", host);
+			result.addBody(returnedBody);
+			return result;
+		} else {
+			return null; // TODO correct error handling
+		}
+	}
+	
+	/**
+	 * Changes the host attribute of all servicehandlers in the given envirenment state map. 
+	 */
+	public void translateServiceHandlers(EnvironmentState envState, String from, String to) {
+		for(String field : envState.serviceHandleFieldNames()) {
+			
+			ServiceHandle serviceHandle = (ServiceHandle) envState.
+											retrieveField(field).getData();
+			if(!serviceHandle.getHost().equals(from)) {
+				continue;
+			}
+			serviceHandle = serviceHandle.withExternalHost(to);
+			envState.addField(field, 
+					new JASEDataObject
+					(ServiceHandle.class.getSimpleName(), serviceHandle));
+			
+		}
 	}
 
 	public ServiceCompositionResult callServiceOperation(String serviceCall, Object... inputs) throws IOException {
@@ -65,22 +120,12 @@ public class HttpServiceClient {
 	}
 
 	public ServiceCompositionResult callServiceOperation(OperationInvocation call, SequentialComposition coreography, Object... additionalInputs) throws IOException {
+		
 		return callServiceOperation(call, coreography, ServiceUtil.getObjectInputMap(additionalInputs));
 	}
 
 	public ServiceCompositionResult callServiceOperation(OperationInvocation call, SequentialComposition coreography, Map<String, Object> additionalInputs) throws IOException {
-
-		/* separate service and operation from name */
-		String opFQName = call.getOperation().getName();
 		
-		// split the opFQName into service (classpath or objectname) and operation name (function name).
-		String[] hostservice_OpTupel = opFQName.split("::", 2);
-		String[] host_serviceTupel = hostservice_OpTupel[0].split("/",2);
-		String host = host_serviceTupel[0]; // hostname e.g.: 'localhost:5000'
-		String service = host_serviceTupel[1]; // service name e.g.: 'packagePath.Constructor'
-		// If no '::' is given, assume its a '__construct' call.
-		String opName = hostservice_OpTupel.length>1 ? hostservice_OpTupel[1] : "__construct";
-
 		/* prepare data */
 		// TODO coreography should have a indexof method
 		int index = 0;
@@ -95,65 +140,56 @@ public class HttpServiceClient {
 			serializedCoreography = new SequentialCompositionSerializer().serializeComposition(coreography);
 		}
 		// create body, encode it and write it to the outputstream.
-		HttpBody body = new HttpBody(additionalInputs, serializedCoreography, index, -1);
-		String encoding = body.encode(otms);
+		HttpBody body = new HttpBody(); // new HttpBody(additionalInputs, serializedCoreography, index, -1);
+		body.setComposition(serializedCoreography);
+		body.setCurrentIndex(index);
+		for(String keyword: additionalInputs.keySet()) {
+			Object input  = additionalInputs.get(keyword);
+			JASEDataObject parsedSemanticInput = null;
+			if(! (input instanceof JASEDataObject)) {
+				// first parse object
+				parsedSemanticInput = otms.allToSemantic(input, false);
+			} else {
+				parsedSemanticInput = (JASEDataObject) input; // the given input is already semantic complient.
+			}
+			body.addKeyworkArgument(keyword, parsedSemanticInput);
+		}
 
 		/* setup connection */
-		URL url = new URL("http://" + host + "/" + service + "/" + opName);
-		if(serializedCoreography != null) {
-			// If it's a choreography, use choreography specific url
-			url = new URL("http://" + host + "/" + "choreography");
-		}
-		HttpURLConnection con = (HttpURLConnection) url.openConnection();
-		con.setRequestMethod("POST");
-		con.setDoOutput(true);
 		
-		/* send data */
-		DataOutputStream wr = new DataOutputStream(con.getOutputStream());
-		wr.writeBytes(encoding);
-		wr.flush();
-		wr.close();
+		/* separate service and operation from name */
+		String opFQName = call.getOperation().getName();
+		String[] hostservice_OpTupel = opFQName.split("::", 2);
+		// split the opFQName into service (classpath or objectname) and operation name (function name).
 
-		/* read and return answer */
-		StringBuilder content = new StringBuilder();
-		try (InputStream in = con.getInputStream()){
-		
-			BufferedReader br = new BufferedReader(new InputStreamReader(in));
-			String curline;
-			while ((curline = br.readLine()) != null) {
-				content.append(curline + '\n');
+
+		String host;
+		URL url;
+		if(serializedCoreography != null) {
+			String serviceKey = hostservice_OpTupel[0];
+			if(serviceKey.contains("/")) {
+				String[] host_serviceTupel = hostservice_OpTupel[0].split("/",2);
+				host = host_serviceTupel[0]; // hostname e.g.: 'localhost:5000'
 			}
-			br.close();
-			con.disconnect();
-		} catch(IOException serverError) {
-			try (InputStream in = con.getErrorStream()){
-				
-				BufferedReader br = new BufferedReader(new InputStreamReader(in));
-				String curline;
-				while ((curline = br.readLine()) != null) {
-					content.append(curline + '\n');
-				}
-				br.close();
-				con.disconnect();
-				System.out.println("");
-			} catch(IOException anotherError) {
-				anotherError.printStackTrace();
+			else if (!additionalInputs.containsKey(serviceKey)) {
+				throw new IllegalArgumentException("Want to execute composition with first service being " + serviceKey + ", but no service handle is given in the additional inputs.");
 			}
-			throw new RuntimeException("Server returned error code " + con.getResponseCode() + ". Message: \n" + content.toString());
+			else{ 
+				ServiceHandle handle = (ServiceHandle) additionalInputs.get(serviceKey);
+				host = handle.getHost();
+			}
+			return sendCompositionRequest(host, body);
 		}
-		JsonNode root = new ObjectMapper().readTree(content.toString());
-		if(root == null) {
-			throw new RuntimeException("Error occured parsing " + content.toString());
+		else {
+			String[] host_serviceTupel = hostservice_OpTupel[0].split("/",2);
+			host = host_serviceTupel[0]; // hostname e.g.: 'localhost:5000'
+			String service = host_serviceTupel[1]; // service name e.g.: 'packagePath.Constructor'
+			// If no '::' is given, assume its a '__construct' call.
+			String opName = hostservice_OpTupel.length>1 ? hostservice_OpTupel[1] : "__construct";
+			return sendRequest(host, service + "/" + opName, body);
 		}
-		ServiceCompositionResult result = new ServiceCompositionResult();
-		Iterator<String> it = root.fieldNames();
-		while (it.hasNext()) {
-			String field = it.next();
-			JsonNode object = root.get(field);
-			result.put(field, object);
-		}
-		return result;
 	}
+	
 
 	public ServiceCompositionResult invokeServiceComposition(SequentialComposition composition, Map<String, Object> inputs) throws IOException {
 

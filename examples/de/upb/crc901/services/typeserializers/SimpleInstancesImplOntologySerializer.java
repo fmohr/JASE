@@ -11,25 +11,21 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import de.upb.crc901.services.core.IOntologySerializer;
 import de.upb.crc901.services.core.JASEDataObject;
 import jaicore.ml.core.SimpleInstancesImpl;
+import jaicore.ml.interfaces.Instances;
 
-public class SimpleInstancesImplOntologySerializer implements IOntologySerializer<SimpleInstancesImpl>  {
+public class SimpleInstancesImplOntologySerializer implements IOntologySerializer<Instances>  {
 	
 	private static final List<String> supportedTypes = Arrays.asList(new String[] {"Instances"});
 	
-	public  SimpleInstancesImpl unserialize(final JASEDataObject jdo) {
-		return new SimpleInstancesImpl(jdo.getObject());
+	public  Instances unserialize(final JASEDataObject jdo) {
+		return (Instances) jdo.getData();
 	}
 
 	@Override
-	public JASEDataObject serialize(SimpleInstancesImpl object) {
-		try {
-			JsonNode node = new ObjectMapper().readTree(object.toJson());
-			String type = "Instnace";
-			JASEDataObject jdo = new JASEDataObject(type, node);
-			return jdo;
-		} catch (IOException e) { 
-			throw new RuntimeException(e.getMessage(), e); // mask checked exception
-		}
+	public JASEDataObject serialize(Instances object) {
+		String type = "Instances";
+		JASEDataObject jdo = new JASEDataObject(type, object);
+		return jdo;
 	}
 
 	@Override

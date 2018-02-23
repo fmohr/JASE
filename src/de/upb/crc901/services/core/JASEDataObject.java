@@ -1,24 +1,23 @@
 package de.upb.crc901.services.core;
 
-import com.fasterxml.jackson.databind.JsonNode;
-
 public class JASEDataObject {
 	private final String type;
-	private final JsonNode object;
+	private final Object object;
 
-	public JASEDataObject(String type, JsonNode object) {
+	public JASEDataObject(String type, Object object) {
 		super();
-		this.type = type;
-		this.object = object;
+		this.type = java.util.Objects.requireNonNull(type);
+		this.object = java.util.Objects.requireNonNull(object);
 	}
 
 	public String getType() {
 		return type;
 	}
-
-	public JsonNode getObject() {
+	
+	public Object getData() {
 		return object;
 	}
+
 
 	@Override
 	public int hashCode() {
@@ -51,10 +50,16 @@ public class JASEDataObject {
 		return true;
 	}
 
-	public static final JASEDataObject FROM_JSON(JsonNode json) {
-		JsonNode object = json.get("data");
-		String type = json.get("type").asText();
-		return new JASEDataObject(type, object);
+	public String toString() {
+		return type + ": " + object.toString();
 	}
+	
+	/**
+	 * Returns true if the type string of this object equals the given semantic name
+	 */
+	public boolean isofType(String semanticType) {
+		return getType().equals(semanticType);
+	}
+	
 
 }
