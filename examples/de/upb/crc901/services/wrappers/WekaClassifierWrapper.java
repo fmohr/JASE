@@ -48,6 +48,9 @@ public class WekaClassifierWrapper extends ServiceWrapper {
 		// Overload the constructor of classifiers:
 		// Take every string in constructor values put it into setOptions of the inner classifier.
 		super.buildDelegate(delegateConstructor, constructorValues);
+		if(constructorValues.length == 0) {
+			return;
+		}
 		if(super.delegate instanceof  OptionHandler) {
 			// we can set it's options:
 			OptionHandler classifier = (OptionHandler) super.delegate;

@@ -20,7 +20,6 @@ public final class ServiceHandle {
   private final String id;
   private final Object service;
 
-  private String variableBinding;
 
   /**
    * Standard constructor
@@ -83,13 +82,6 @@ public final class ServiceHandle {
     return this.host;
   }
 
-  public String getVariableBinding() {
-    return this.variableBinding;
-  }
-
-  public void setVariableBinding(final String varName) {
-    this.variableBinding = varName;
-  }
 
   public String getClasspath() {
     return this.classpath;
@@ -164,7 +156,7 @@ public final class ServiceHandle {
     return new ServiceHandle(this.getHost(), this.getClasspath(), not_serialized_id, this.getService());
   }
 
-  public boolean containService() {
+	public boolean containService() {
     return service_placeholder != this.getService();
   }
 }
