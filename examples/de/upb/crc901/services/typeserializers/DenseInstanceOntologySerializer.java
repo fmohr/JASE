@@ -46,18 +46,22 @@ public class DenseInstanceOntologySerializer implements IOntologySerializer<Dens
 		else {
 			Instances instances = new Instances(instance.dataset(), 1);
 			instances.add(instance);
-			weka.filters.unsupervised.attribute.NominalToBinary toBinFilter = new weka.filters.unsupervised.attribute.NominalToBinary();
-			Instance filteredInstace = null;
-			try {
-				toBinFilter.setInputFormat(instances);
-				instances = Filter.useFilter(instances, toBinFilter);
-				filteredInstace = instances.get(0);
-			} catch (Exception e) {
-				e.printStackTrace();
-				throw new RuntimeException(e);
+			
+			Instance wekaInstance = instance;
+			if(WekaUtil.needsBinarization(instances, true)) {
+				weka.filters.unsupervised.attribute.NominalToBinary toBinFilter = new weka.filters.unsupervised.attribute.NominalToBinary();
+				Instance filteredInstace = null;
+				try {
+					toBinFilter.setInputFormat(instances);
+					instances = Filter.useFilter(instances, toBinFilter);
+					wekaInstance = instances.get(0);
+				} catch (Exception e) {
+					e.printStackTrace();
+					throw new RuntimeException(e);
+				}
 			}
 			
-			object = WekaUtil.toJAICoreLabeledInstance(filteredInstace);
+			object = WekaUtil.toJAICoreLabeledInstance(wekaInstance);
 			type = "LabeledInstance";
 		}
 		JASEDataObject jdo = new JASEDataObject(type, object);

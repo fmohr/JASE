@@ -38,17 +38,20 @@ public class InstanceOntologySerializer implements IOntologySerializer<Instance>
 		if (instance.classIndex() < 0)
 			return new JASEDataObject("Instance", WekaUtil.toJAICoreInstance(instance));
 		else {
+			
 			Instances instances = new Instances(instance.dataset(), 1);
 			instances.add(instance);
-			weka.filters.unsupervised.attribute.NominalToBinary toBinFilter = new weka.filters.unsupervised.attribute.NominalToBinary();
-			
-			try {
-				toBinFilter.setInputFormat(instances);
-				instances = Filter.useFilter(instances, toBinFilter);
-				instance = instances.get(0);
-			} catch (Exception e) {
-				e.printStackTrace();
-				throw new RuntimeException(e);
+			if(WekaUtil.needsBinarization(instances, true)) {
+				weka.filters.unsupervised.attribute.NominalToBinary toBinFilter = new weka.filters.unsupervised.attribute.NominalToBinary();
+				
+				try {
+					toBinFilter.setInputFormat(instances);
+					instances = Filter.useFilter(instances, toBinFilter);
+					instance = instances.get(0);
+				} catch (Exception e) {
+					e.printStackTrace();
+					throw new RuntimeException(e);
+				}
 			}
 			
 			return new JASEDataObject("LabeledInstance", WekaUtil.toJAICoreLabeledInstance(instance));

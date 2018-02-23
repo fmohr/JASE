@@ -39,46 +39,7 @@ public class InstancesOntologySerializer implements IOntologySerializer<Instance
 //			TimeLogger.STOP_TIME("unserialize done");
 			return WekaUtil.fromJAICoreInstances((jaicore.ml.interfaces.Instances)jdo.getData());
 		} else if(jdo.getData() instanceof LabeledInstances<?>) {
-			LabeledInstances<String> data = (LabeledInstances<String>) jdo.getData();
-			int attributeCount = data.getNumberOfColumns() + 1; // the amount of attributes including the class label.
-			/* create basic attribute entries */
-			ArrayList<Attribute> attributeList = new ArrayList<>(attributeCount);
-			for (int i = 1; i < attributeCount; i++) {
-				attributeList.add(new Attribute("a" + i));
-			}
-			ArrayList<String> classes = new ArrayList<>();
-			for(String classLabel : data.getOccurringLabels()) {
-				classes.add(classLabel);
-			}
-			Attribute classAttribute = new Attribute("label", classes);
-			
-			attributeList.add(classAttribute);
-			
-			weka.core.Instances wekaInstances = new Instances("JAICore-extracted dataset", attributeList,
-					data.getNumberOfRows());
-			wekaInstances.setClassIndex(wekaInstances.numAttributes()-1); // the last item is the class attribute.
-			
-			// take every labeled instance and put it into the wekaInstances.
-			for (jaicore.ml.interfaces.LabeledInstance<String> labeledInstance : data) {
-				double[] values = new double[attributeCount];
-				for (int i = 0; i < attributeCount - 1; i++) {
-					values[i] = labeledInstance.get(i);
-				}
-				weka.core.Instance wekaInstance = new DenseInstance(1.0, values);
-				// classValue in a weka.core.Instance is the index of the class value.
-				String label = labeledInstance.getLabel();
-				Double classIndex = new Double(classAttribute.indexOfValue(label));
-				wekaInstance.setDataset(wekaInstances);
-				try {
-
-					wekaInstance.setClassValue(classIndex);
-				} catch(Exception ex) {
-					ex.printStackTrace();
-				}
-				
-				wekaInstances.add(wekaInstance);
-			}
-			return wekaInstances;
+			return WekaUtil.fromJAICoreInstances((LabeledInstances<String>)jdo.getData());
 		}
 		else {
 			throw typeMismatch(jdo);
@@ -90,15 +51,19 @@ public class InstancesOntologySerializer implements IOntologySerializer<Instance
 		if (wekaInstances.classIndex() < 0) {
 			return new JASEDataObject("Instances", WekaUtil.toJAICoreInstances(wekaInstances));
 		}
-		else {
-			weka.filters.unsupervised.attribute.NominalToBinary toBinFilter = new weka.filters.unsupervised.attribute.NominalToBinary();
-			
-			try {
-				toBinFilter.setInputFormat(wekaInstances);
-				wekaInstances = Filter.useFilter(wekaInstances, toBinFilter);
-			} catch (Exception e) {
-				e.printStackTrace();
-				throw new RuntimeException(e);
+		else{
+			if(WekaUtil.needsBinarization(wekaInstances, true)) {
+				weka.filters.unsupervised.attribute.NominalToBinary toBinFilter = new weka.filters.unsupervised.attribute.NominalToBinary();
+				try {
+					toBinFilter.setInputFormat(wekaInstances);
+					wekaInstances = Filter.useFilter(wekaInstances, toBinFilter);
+				} catch (Exception e) {
+					e.printStackTrace();
+					throw new RuntimeException(e);
+				}
+				System.out.println("DID binarization");
+			} else {
+				System.out.println("Skipped binarization");
 			}
 			return new JASEDataObject("LabeledInstances", WekaUtil.toJAICoreLabeledInstances(wekaInstances));
 		}
