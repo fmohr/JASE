@@ -52,6 +52,7 @@ import de.upb.crc901.services.core.HttpServiceClient;
 import de.upb.crc901.services.core.HttpServiceServer;
 import de.upb.crc901.services.core.OntologicalTypeMarshallingSystem;
 import de.upb.crc901.services.core.ServiceCompositionResult;
+import de.upb.crc901.services.core.ServiceHandle;
 import jaicore.basic.FileUtil;
 import jaicore.basic.MathExt;
 import jaicore.ml.WekaUtil;
@@ -136,7 +137,8 @@ public class PaseCallsTests {
 	public void testPaseServiceOperation() throws Exception{
 		ServiceCompositionResult result = client.callServiceOperation("localhost:5000/plainlib.package1.b.B::__construct", 1,2);
 //		Assert.assertEquals("plainlib.package1.b.B", result.get("class").asText());
-		Assert.assertTrue(result.containsKey("id"));
+		ServiceHandle sh = (ServiceHandle) result.get("out").getData();
+		Assert.assertTrue(sh.isRemote());
 	}
 	
 }

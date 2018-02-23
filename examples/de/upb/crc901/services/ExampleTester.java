@@ -68,7 +68,7 @@ import weka.core.Instances;
 
 public class ExampleTester {
 
-	private final static int PORT = 8000;
+	private final static int PORT = 5000;
 
 	private HttpServiceServer server;
 	private SequentialComposition composition;

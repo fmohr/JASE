@@ -86,12 +86,11 @@ public class InstancesOntologySerializer implements IOntologySerializer<Instance
 	}
 
 	public JASEDataObject serialize(Instances wekaInstances) {
-		TimeLogger.STOP_TIME("wekainstance -> labeledinstances with size: " + wekaInstances.size() + " started");
+//		TimeLogger.STOP_TIME("wekainstance -> labeledinstances with size: " + wekaInstances.size() + " started");
 		if (wekaInstances.classIndex() < 0) {
 			return new JASEDataObject("Instances", WekaUtil.toJAICoreInstances(wekaInstances));
 		}
 		else {
-			LabeledInstances<String> linstances = new SimpleLabeledInstancesImpl();
 			weka.filters.unsupervised.attribute.NominalToBinary toBinFilter = new weka.filters.unsupervised.attribute.NominalToBinary();
 			
 			try {
@@ -101,33 +100,7 @@ public class InstancesOntologySerializer implements IOntologySerializer<Instance
 				e.printStackTrace();
 				throw new RuntimeException(e);
 			}
-			String[] classValues; // caches the class values.
-			{
-				Attribute classAttribute = wekaInstances.classAttribute();
-				classValues = new String[classAttribute.numValues()];
-				Enumeration<Object> classValueEnumerator = classAttribute.enumerateValues();
-				int index = 0;
-				while(classValueEnumerator.hasMoreElements()) {
-					String classLabel = (String) classValueEnumerator.nextElement();
-					if(classLabel == null) {
-						throw new RuntimeException();
-					}
-					classValues[index] = classLabel;
-					index ++;
-				}
-			}
-			
-			for (Instance wekaInst : wekaInstances) {
-				jaicore.ml.interfaces.LabeledInstance<String> inst = new SimpleLabeledInstanceImpl();
-				for (int att = 0; att < wekaInst.numAttributes() && att != wekaInst.classIndex(); att++) {
-					inst.add(wekaInst.value(att));
-				}
-				double classValue = wekaInst.classValue();
-				inst.setLabel(classValues[(int) classValue]);
-				linstances.add(inst);
-		    }
-			
-			return new JASEDataObject("LabeledInstances", linstances);
+			return new JASEDataObject("LabeledInstances", WekaUtil.toJAICoreLabeledInstances(wekaInstances));
 		}
 	}
 

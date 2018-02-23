@@ -6,6 +6,7 @@ import de.upb.crc901.services.core.HttpServiceClient;
 import de.upb.crc901.services.core.HttpServiceServer;
 import de.upb.crc901.services.core.OntologicalTypeMarshallingSystem;
 import de.upb.crc901.services.core.ServiceCompositionResult;
+import de.upb.crc901.services.core.ServiceHandle;
 import de.upb.crc901.services.core.TimeLogger;
 import de.upb.crc901.services.wrappers.WekaClassifierWrapper;
 
@@ -24,6 +25,7 @@ import java.util.Random;
 
 import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -66,17 +68,26 @@ public class DeployTests {
 
     wekaInstances.setClassIndex(wekaInstances.numAttributes() - 1);
 
-    wekaInstancesSmall = new Instances(
-        new BufferedReader(new FileReader("../CrcTaskBasedConfigurator/testrsc" + File.separator + "polychotomous" + File.separator + "audiology.arff")));
-    wekaInstancesSmall.setClassIndex(wekaInstancesSmall.numAttributes() - 1);
-
-    wekaInstancesLarge = new Instances(
-        new BufferedReader(new FileReader("../CrcTaskBasedConfigurator/testrsc" + File.separator + "polychotomous" + File.separator + "letter.arff")));
-    wekaInstancesLarge.setClassIndex(wekaInstancesLarge.numAttributes() - 1);
-
-    wekaInstancesXLarge = new Instances(
-        new BufferedReader(new FileReader("../CrcTaskBasedConfigurator/testrsc" + File.separator + "polychotomous" + File.separator + "kropt.arff")));
-    wekaInstancesXLarge.setClassIndex(wekaInstancesXLarge.numAttributes() - 1);
+    // wekaInstancesSmall = new Instances(
+    // new BufferedReader(new FileReader(
+    // "../CrcTaskBasedConfigurator/testrsc" +
+    // File.separator + "secom" +
+    // File.separator + "train.arff")));
+    // wekaInstancesSmall.setClassIndex(wekaInstancesSmall.numAttributes() - 1);
+    //
+    // wekaInstancesLarge = new Instances(
+    // new BufferedReader(new FileReader(
+    // "../CrcTaskBasedConfigurator/testrsc" +
+    // File.separator + "mnist" +
+    // File.separator + "train.arff")));
+    // wekaInstancesLarge.setClassIndex(wekaInstancesLarge.numAttributes() - 1);
+    //
+    // wekaInstancesXLarge = new Instances(
+    // new BufferedReader(new FileReader(
+    // "../CrcTaskBasedConfigurator/testrsc" +
+    // File.separator + "mnist" +
+    // File.separator + "test.arff")));
+    // wekaInstancesXLarge.setClassIndex(wekaInstancesXLarge.numAttributes() - 1);
   }
 
   @AfterClass
@@ -92,21 +103,22 @@ public class DeployTests {
   public void tearDown() throws Exception {
   }
 
-  // @Test
+  @Test
   public void test_preproPase_classifyPase() throws FileNotFoundException, IOException {
     List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .1f, .8f);
     ServiceCompositionResult result = this.executeComposition("testrsc/deployPase.txt", split.get(0), split.get(1), split.get(2));
     System.out.println("Prediction accuracy Scikit RandomForestClassifier: " + result.get("Accuracy").getData());
   }
 
-  // @Test
+  @Test
   public void test_preproPase_classifyJase() throws FileNotFoundException, IOException {
     List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .1f, .8f);
     ServiceCompositionResult result = this.executeComposition("testrsc/deployJase.txt", split.get(0), split.get(1), split.get(2));
     System.out.println("Prediction accuracy Weka RandomForest: " + result.get("Accuracy").getData());
+    Assert.assertEquals("localhost:8000", ((ServiceHandle) result.get("forestmodel").getData()).getHost());
   }
 
-  // @Test
+  @Test
   public void test_nn_tensorflow() throws IOException {
     List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .8f, .14f, 0.05f);
     ServiceCompositionResult result = this.executeComposition("testrsc/nn_tf.txt", split.get(0), split.get(1), split.get(2));

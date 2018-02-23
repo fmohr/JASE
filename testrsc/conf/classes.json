@@ -1,11 +1,16 @@
 {
     "de.upb.crc901.services.wrappers.WekaClassifierWrapper":{
-        "methods": ["declare_classes", "train", "predict", "predict_and_score"]
+        "methods": {
+            "declare_classes" : {}, 
+            "train" : {}, 
+            "predict" : {}, 
+            "predict_and_score":{}
+        }
     },
 
     "$base_weka_classifier_config$":{
         "wrapper" : "de.upb.crc901.services.wrappers.WekaClassifierWrapper",
-        "methods": ["classifyInstance"]
+        "methods": {"classifyInstance" : {}}
     },
 
     "weka.classifiers.bayes.BayesNet" : {
@@ -160,7 +165,7 @@
     },
 
     "de.upb.crc901.services.wrappers.WekaFilterWrapper" : {
-        "methods" : ["preprocess"]
+        "methods" : {"preprocess":{}}
     }, 
     "$base_weka_filter_config$" : {
         "wrapper" : "de.upb.crc901.services.wrappers.WekaFilterWrapper",

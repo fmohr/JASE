@@ -133,7 +133,8 @@ public class MLServicePipeline implements Classifier {
     preprocessors.add(new String[] { "weka.attributeSelection.AttributeSelection", "weka.attributeSelection.Ranker", "weka.attributeSelection.PrincipalComponents" });
     preprocessors.add(new String[] { "weka.attributeSelection.AttributeSelection", "weka.attributeSelection.Ranker", "weka.attributeSelection.PrincipalComponents" });
 
-    MLServicePipeline pl = new MLServicePipeline("localhost", port, "weka.classifiers.lazy.IBk", preprocessors);
+    System.out.println("Create MLServicePipeline with classifier and " + preprocessors.size() + " many preprocessors.");
+    MLServicePipeline pl = new MLServicePipeline("localhost", port, "weka.classifiers.trees.RandomForest", preprocessors);
 
     Instances wekaInstances = new Instances(
         new BufferedReader(new FileReader("../CrcTaskBasedConfigurator/testrsc" + File.separator + "polychotomous" + File.separator + "audiology.arff")));
@@ -156,4 +157,5 @@ public class MLServicePipeline implements Classifier {
     System.out.println("Pipeline done. This many mistakes were made:" + mistakes + ". Error rate: " + (mistakes * 1f / split.get(1).size()));
     server.shutdown();
   }
+
 }

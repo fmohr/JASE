@@ -164,6 +164,7 @@ public class WekaClassifierWrapper extends ServiceWrapper {
 	 *            training data
 	 */
 	public void train(LabeledInstances<String> trainingData) {
+		TimeLogger.STOP_TIME("Train method envoced");
 
 		if (trainingData.getNumberOfRows() < 1) { // no data. do nothing.
 			return; // :(
@@ -315,7 +316,12 @@ public class WekaClassifierWrapper extends ServiceWrapper {
 	 */
 	private weka.core.Instances createWekaInstances(Iterable<? extends Instance> data, int rows, int columns) {
 		int attributeCount = columns + 1; // the amount of attributes including the class label.
-		weka.core.Instances wekaInstances = new Instances("JAICore-extracted dataset", this.attributeList, rows);
+		weka.core.Instances wekaInstances = null ;
+		try {
+			wekaInstances = new Instances("JAICore-extracted dataset", this.attributeList, rows);
+		}catch(NullPointerException ex) {
+			ex.printStackTrace();
+		}
 		wekaInstances.setClassIndex(attributeCount - 1); // the last item is the class attribute.
 		for (Instance instance : data) {
 			double[] values = new double[attributeCount];

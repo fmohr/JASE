@@ -22,7 +22,7 @@ public class SimpleLabeledInstancesImplOntologySerializer implements IOntologySe
 	}
 
 	public JASEDataObject serialize(final LabeledInstances<String> linstances) {
-		String type = "Instances";
+		String type = "LabeledInstances";
 		JASEDataObject jdo = new JASEDataObject(type, linstances);
 		return jdo;
 	}
