@@ -61,6 +61,9 @@ public class OntologicalTypeMarshallingSystem {
 	// a cache that maps the link between semantic and pojo objects to a flag that indicates if serialization between them is possible. used by is Link Implemented
 	private final static Map<Link, Boolean> linkExistsCache = new HashMap<>();
 	
+	// a cache that maps each Serializer Class Name to it's serializer. if a class is mapped to null it means that the serializer doesn't exist.
+	private final static Map<String, IOntologySerializer> serializerCache = new HashMap<>();
+	
 	/**
 	 * Returns true if the given object can be cast to the given semantic type.
 	 */
@@ -259,20 +262,38 @@ public class OntologicalTypeMarshallingSystem {
 		if (o == null) {
 			throw new IllegalArgumentException("Cannot serialize null-objects.");
 		}
+		String classname = o.getClass().getSimpleName();
+		String serializerClassName = "de.upb.crc901.services.typeserializers." + classname + "OntologySerializer";
+		IOntologySerializer serializer;
+		if(!serializerCache.containsKey(serializerClassName)) {
+//				Method method = MethodUtils.getMatchingAccessibleMethod(Class.forName(serializerClassName), "serialize", o.getClass());
+//				assert method != null : "Could not find method \"serialize(" + o.getClass() + ")\" in serializer class " + serializerClassName;
+			try {
+				serializer = (IOntologySerializer<?>) Class.forName(serializerClassName).getConstructor().newInstance();
+			} catch (Exception e) {
+				// cache the info that the serializer couldnt be found:
+				serializerCache.put(serializerClassName, null);
+				serializer = null;
+			}
+		}
+		else { // this serializer was cached by a previous invocation:
+			serializer = serializerCache.get(serializerClassName);
+		}
+		if(serializer == null) {
+			// couldnt be found:
+			throw new UnsupportedOperationException("Cannot convert objects of type " + classname
+					+ " to JSON. The necessary serializer class \""+serializerClassName+"\" was not found.");
+		
+		}
 		try {
-			String classname = o.getClass().getSimpleName();
-			String serializerClassName = "de.upb.crc901.services.typeserializers." + classname + "OntologySerializer";
-			Method method = MethodUtils.getMatchingAccessibleMethod(Class.forName(serializerClassName), "serialize", o.getClass());
-			assert method != null : "Could not find method \"serialize(" + o.getClass() + ")\" in serializer class " + serializerClassName;
-			IOntologySerializer<?> serializer = (IOntologySerializer<?>) Class.forName(serializerClassName).getConstructor().newInstance();
+			
 			TimeLogger.STOP_TIME("Serializing " + classname + " started");
-			JASEDataObject serialization = (JASEDataObject) method.invoke(serializer, o);
+			JASEDataObject serialization = (JASEDataObject) serializer.serialize(o);
+			// method.invoke(serializer, o);
 			TimeLogger.STOP_TIME("Serializing " + classname + " concluded");
+			
 			return serialization;
-		} catch (ClassNotFoundException e) {
-			throw new UnsupportedOperationException("Cannot convert objects of type " + o.getClass().getName()
-					+ " to JSON. The necessary serializer class \"de.upb.crc901.services.typeserializers." + o.getClass().getSimpleName() + "OntologySerializer\" was not found.");
-		} catch (IllegalAccessException | InvocationTargetException | IllegalArgumentException | InstantiationException | NoSuchMethodException e) {
+		} catch (Exception e) {
 			throw new UnsupportedOperationException(
 					"Cannot convert objects of type " + o.getClass().getName() + " to JSON objects. The necessary serializer class \"de.upb.crc901.services.typeserializers."
 							+ o.getClass().getSimpleName() + "OntologySerializer\" throws an exception.",e);
@@ -280,37 +301,50 @@ public class OntologicalTypeMarshallingSystem {
 	}
 	
 	public  <T> T objectFromSemantic(JASEDataObject jdo, Class<T> clazz) {
+		
 		String type = jdo.getType();
 		/* determine serializer */
-		try {
-			String classname = clazz.getSimpleName();
-			Class<?> serializerClass = Class.forName("de.upb.crc901.services.typeserializers." + classname + "OntologySerializer");
-			Method method = MethodUtils.getAccessibleMethod(serializerClass, "unserialize", JASEDataObject.class);
-			if (method == null)
-				throw new UnsupportedOperationException("Cannot convert objects of type " + type + " to a Java object of class " + clazz.getName()
-						+ ". The serializer class \"de.upb.crc901.services.typeserializers." + clazz.getSimpleName()
-						+ "OntologySerializer\" has no method \"unserialize(JsonNode)\".");
+		String classname = clazz.getSimpleName();
+		String serializerClasspath = "de.upb.crc901.services.typeserializers." + classname + "OntologySerializer";
+		IOntologySerializer serializer;
+		if(!serializerCache.containsKey(serializerClasspath)) {
+			try {
+				serializer = (IOntologySerializer) Class.forName(serializerClasspath).getConstructor().newInstance();
+			}	catch (Exception e) {
+				// cache the info that the serializer couldnt be found:
+				serializerCache.put(serializerClasspath, null);
+				serializer = null;
+			}
+		} else {
+			serializer = serializerCache.get(serializerClasspath);
+		}
+		if(serializer == null) { // serializer not found:
+			throw new UnsupportedOperationException("Cannot convert objects of type " + type + " to a Java object of class " + clazz.getName()
+			+ ". The necessary serializer class \"de.upb.crc901.services.typeserializers." + clazz.getSimpleName() + "OntologySerializer\" was not found.");
+		}
+			// TODO remove this block
+//			Method method = MethodUtils.getAccessibleMethod(serializerClass, "unserialize", JASEDataObject.class);
+//			if (method == null)
+//				throw new UnsupportedOperationException("Cannot convert objects of type " + type + " to a Java object of class " + clazz.getName()
+//						+ ". The serializer class \"de.upb.crc901.services.typeserializers." + clazz.getSimpleName()
+//						+ "OntologySerializer\" has no method \"unserialize(JsonNode)\".");
+//
+//			Object rawSerializer = serializerClass.getConstructor().newInstance();
+//			if (!(IOntologySerializer.class.isInstance(rawSerializer)))
+//				throw new ClassCastException("The ontological serializer for " + clazz.getSimpleName() + " does not implement the IOntologySerializer interface!");
+			
 
-			Object rawSerializer = serializerClass.getConstructor().newInstance();
-			if (!(IOntologySerializer.class.isInstance(rawSerializer)))
-				throw new ClassCastException("The ontological serializer for " + clazz.getSimpleName() + " does not implement the IOntologySerializer interface!");
+		try {
 			TimeLogger.STOP_TIME("Deserializing " + classname + " started");
 			/* unserialize the semantic object to an actualy required Java object */
-			T returnValue = (T) method.invoke(rawSerializer, jdo);
+			T returnValue = (T) serializer.unserialize(jdo);
 			TimeLogger.STOP_TIME("Deserializing " + classname + " concluded");
 			return returnValue;
-		} catch (ClassNotFoundException e) {
-			throw new UnsupportedOperationException("Cannot convert objects of type " + type + " to a Java object of class " + clazz.getName()
-					+ ". The necessary serializer class \"de.upb.crc901.services.typeserializers." + clazz.getSimpleName() + "OntologySerializer\" was not found.");
-		} catch (InvocationTargetException e) {
-			e.getTargetException().printStackTrace();
-			throw new UnsupportedOperationException("Cannot convert objects of type " + type + " to a Java object of class " + clazz.getName()
-					+ ". The necessary serializer class \"de.upb.crc901.services.typeserializers." + clazz.getSimpleName() + "OntologySerializer\" throws an exception.");
-		} catch (IllegalAccessException | IllegalArgumentException | InstantiationException | NoSuchMethodException e) {
+		}  catch (Exception e) {
 			e.printStackTrace();
-			throw new UnsupportedOperationException("Cannot convert objects of type " + type + " to a Java object of class " + clazz.getName()
-					+ ". The necessary serializer class \"de.upb.crc901.services.typeserializers." + clazz.getSimpleName() + "OntologySerializer\" throws an exception.");
-		}
+			throw new UnsupportedOperationException("Cannot convert objects of type " + type + " to a Java object of class " + classname
+					+ ". The necessary serializer class \""+serializerClasspath+"\" throws an exception.");
+		} 
 	}
 	
 	public Object[] objectArrayFromSemantic(Class<?>[] requiredType, List<JASEDataObject> jdoList) {

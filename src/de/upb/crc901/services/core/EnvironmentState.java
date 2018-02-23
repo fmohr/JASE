@@ -245,18 +245,25 @@ public final class EnvironmentState {
 
 	/**
 	 * Returns the pointer to the current map.
-	 * @deprecated Will be removed to prohibit access to the map itself. 
+	 * @deprecated Will be removed at some point to prohibit access to the map itself. 
 	 * That's because a environment by definition doesn't lose fields. 
-	 * Exposing the pointer to the map may lead to bugs.
+	 * Exposing the pointer to the inner map may lead to bugs.
 	 */
 	public Map<String, JASEDataObject> getCurrentMap() {
 		return envState;
 	}
-	
+
 	/**
-	 * Extends the fields of this map by the given one.
+	 * Extends the fields of this map by the ones from the given state.
 	 */
-	public void extendBy(HashMap<String, JASEDataObject> map) {
+	public void extendBy(EnvironmentState additionalState) {
+		this.extendBy(additionalState.getCurrentMap());
+	}
+
+	/**
+	 * Extends the fields of this map by the ones from the given map.
+	 */
+	public void extendBy(Map<String, JASEDataObject> map) {
 		for(String keyString : map.keySet()) {
 			addField(keyString, map.get(keyString));
 		}

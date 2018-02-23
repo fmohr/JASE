@@ -228,7 +228,7 @@ public class HttpServiceServer {
 				}
 				logger.info("Finished local execution. Now invoking {}", invocationToMakeFromHere);
 
-				/* call next service */
+				/* forward next service */
 				if (invocationToMakeFromHere != null) {
 
 					/* extract vars from state that are in json (ordinary data but not service references) */
@@ -253,7 +253,7 @@ public class HttpServiceServer {
 					HttpBody forwardBody = new HttpBody(forwardInputs, body.getComposition(), currentIndex, -1);
 					
 					if(pieces.hasHost()) {
-						result = new EasyClient().withBody(forwardBody).withHost(pieces.host).dispatch();
+						result = new EasyClient().withBody(forwardBody).withHost(pieces.getHost()).dispatch();
 					}else if(envState.containsField(pieces.getId())){
 						
 						if (!(envState.retrieveField(pieces.getId()).getData() instanceof ServiceHandle)) {
@@ -412,6 +412,9 @@ public class HttpServiceServer {
 		String getId() {
 			return id;
 		}
+		String getServiceName() {
+			return context;
+		}
 		String getHost() {
 			return host;
 		}
@@ -516,10 +519,10 @@ public class HttpServiceServer {
 							.unserializeObject(getServicePath(opPieces.getClasspath(), opPieces.getId()));
 					handler = new ServiceHandle(opPieces.getClasspath(), opPieces.getId(), service);
 				} else {
-					if (!envState.containsField(opPieces.getId())) {
+					if (!envState.containsField(opPieces.getServiceName())) {
 						throw new RuntimeException("The handler wasn't found in the state.");
 					}
-					if (!(envState.retrieveField(opPieces.getId()).getData() instanceof ServiceHandle)) {
+					if (!(envState.retrieveField(opPieces.getServiceName()).getData() instanceof ServiceHandle)) {
 						throw new RuntimeException("The refered object " + opPieces.getId() + " was of type "
 								+ envState.retrieveField(opPieces.getId()).getType());
 					}
@@ -529,6 +532,8 @@ public class HttpServiceServer {
 					} else {
 						Object service = FileUtil.unserializeObject(getServicePath(emptyHandler.getClasspath(), emptyHandler.getId()));
 						handler = emptyHandler.withService(service);
+						// replace the servicehandler in state so that next time the service is already unserialized:
+						envState.addField(opPieces.getServiceName(), otms.objectToSemantic(handler));
 					}
 				}
 				boolean wrapped = classesConfig.isWrapped(handler.getClasspath());
