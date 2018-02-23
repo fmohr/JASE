@@ -3,7 +3,9 @@ package de.upb.crc901.services.core;
 import jaicore.basic.FileUtil;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -256,18 +258,33 @@ public final class EasyClient {
 		this.body.addKeyworkArgument(keyword, parsedArgument);
 		return this;
 	}
-
-	public EasyClient withMaxIndex(final int currentIndex) {
-		this.body.setMaxIndex(currentIndex);
-		return this;
+	
+	public EasyClient withKeywordArgument_StringList(final String keyword,
+			final String...argValues) {
+		Objects.requireNonNull(argValues);
+		List<String> stringlist = new ArrayList<String>(Arrays.asList(argValues));
+		return withKeywordArgument(keyword, stringlist);
 	}
-
+	
 	public EasyClient withPositionalArgument(final Object data) {
 		Objects.requireNonNull(data);
 		JASEDataObject parsedArgument = this.otms.allToSemantic(data, false);
 		this.body.addPositionalArgument(parsedArgument);
 		return this;
 	}
+
+	
+	public EasyClient withPositionalArgument_StringList(final String...argValues) {
+		Objects.requireNonNull(argValues);
+		List<String> stringlist = Arrays.asList(argValues);
+		return withPositionalArgument(stringlist);
+	}
+
+	public EasyClient withMaxIndex(final int currentIndex) {
+		this.body.setMaxIndex(currentIndex);
+		return this;
+	}
+
 
 	public EasyClient withService(final ServiceHandle serviceHandle) {
 		this.innerHandle = Objects.requireNonNull(serviceHandle);

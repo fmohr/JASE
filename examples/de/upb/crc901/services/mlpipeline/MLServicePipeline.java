@@ -53,11 +53,12 @@ public class MLServicePipeline implements Classifier {
 			String evalFieldName = "eval" + varIDCounter;
 
 			constructorEC.withKeywordArgument(searcherFieldName, ppDef[1])
+					.withKeywordArgument_StringList("test123", "someOption")
 					.withKeywordArgument(evalFieldName, ppDef[2]);
 
 			constructorEC.withAddedConstructOperation(ppFieldName, // output field name of the created servicehandle
 					ppDef[0], // classpath of the preprocessor
-					searcherFieldName, evalFieldName);
+					searcherFieldName, evalFieldName, "test123");
 
 			varIDCounter++;
 		}
@@ -65,7 +66,7 @@ public class MLServicePipeline implements Classifier {
 		String[] classifierArgNames = new String[classifierArgs.length];
 		
 		
-		 constructorEC.withHost("131.234.73.81", 5000); //uncomment to specify pase host here: TODO 
+//		 constructorEC.withHost("131.234.73.81", 5000); //uncomment to specify pase host here: TODO 
 		int argIndex = 0;
 		for(Object classifierArg : classifierArgs) {
 			String fieldname = "classifierArg" + argIndex;
@@ -212,7 +213,7 @@ public class MLServicePipeline implements Classifier {
 			preprocessors
 					.add(new String[]{"weka.attributeSelection.AttributeSelection",
 							"weka.attributeSelection.Ranker",
-							"weka.attributeSelection.PrincipalComponents"});
+							"weka.attributeSelection.CfsSubsetEval"});
 			preprocessors
 					.add(new String[]{"weka.attributeSelection.AttributeSelection",
 							"weka.attributeSelection.Ranker",
@@ -226,7 +227,7 @@ public class MLServicePipeline implements Classifier {
 					+ preprocessors.size() + " many preprocessors.");
 			
 			MLServicePipeline pl = new MLServicePipeline("localhost", port,
-					"tflib.NeuralNet", preprocessors, 2);
+					"weka.classifiers.lazy.IBk", preprocessors, 2);
 
 			Instances wekaInstances = new Instances(new BufferedReader(
 					new FileReader("../CrcTaskBasedConfigurator/testrsc"

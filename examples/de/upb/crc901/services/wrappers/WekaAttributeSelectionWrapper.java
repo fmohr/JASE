@@ -1,6 +1,7 @@
 package de.upb.crc901.services.wrappers;
 
 import java.lang.reflect.Constructor;
+import java.util.List;
 
 import de.upb.crc901.services.core.JASEDataObject;
 import de.upb.crc901.services.core.ServiceWrapper;
@@ -57,22 +58,48 @@ public class WekaAttributeSelectionWrapper extends ServiceWrapper {
 	
 	@Override
 	protected void buildDelegate(final Constructor<? extends Object> delegateConstructor, final Object[] constructorValues) {
-		if(constructorValues.length != 2) {
+		if(constructorValues.length < 2) {
 			throw new RuntimeException("Given length is: " +  constructorValues.length);
 		}
 		super.buildDelegate(delegateConstructor, constructorValues);
 		AttributeSelection selection = (AttributeSelection) getDelegate();
-		String asSearcherClasspath = ((JASEDataObject) constructorValues[0]).getData().toString();
-		String asEvaluatorClasspath = ((JASEDataObject) constructorValues[1]).getData().toString(); 
+		int parameterIndex = 0;
+		
+		String asSearcherClasspath = ((JASEDataObject) constructorValues[parameterIndex]).getData().toString();
+		parameterIndex ++;
+		// now the 2nd value might be options for the searcher:
+		String[] searcherOptions;
+		if(((JASEDataObject) constructorValues[parameterIndex]).isofType("StringList")){
+			@SuppressWarnings("unchecked")
+			List<String> optionList = (List<String>) ((JASEDataObject) constructorValues[parameterIndex]).getData();
+			searcherOptions = optionList.toArray(new String[optionList.size()]);
+			parameterIndex++;
+		}
+		else {
+			searcherOptions = new String[0];
+		}
+		// the next arguemtn is the classname of the evaluator
+		String asEvaluatorClasspath = ((JASEDataObject) constructorValues[parameterIndex]).getData().toString(); 
+		parameterIndex++;
+		
+		// the one after, if specified, is the options of evaluator
+		String[] evalOptions;
+		if(constructorValues.length>parameterIndex && ((JASEDataObject) constructorValues[parameterIndex]).isofType("StringList")) {
+			List<String> optionList = (List<String>) ((JASEDataObject) constructorValues[parameterIndex]).getData();
+			evalOptions = optionList.toArray(new String[optionList.size()]);
+		}
+		else {
+			evalOptions = new String[0];
+		}
 		try {
-			ASSearch asSearch = ASSearch.forName(asSearcherClasspath, new String[0]);
+			ASSearch asSearch = ASSearch.forName(asSearcherClasspath, searcherOptions);
 			selection.setSearch(asSearch);
 		} catch (Exception e) {
 			e.printStackTrace();
 			throw new RuntimeException(e);
 		}
 		try {
-			ASEvaluation asEvaluator = ASEvaluation.forName(asEvaluatorClasspath, new String[0]);
+			ASEvaluation asEvaluator = ASEvaluation.forName(asEvaluatorClasspath, evalOptions);
 			selection.setEvaluator(asEvaluator);
 		} catch (Exception e) {
 			e.printStackTrace();

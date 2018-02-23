@@ -201,6 +201,13 @@
     "weka.attributeSelection.AttributeSelection" : {
         "extends" : ["$base_weka_attributeselection_config$"]
     },
+    "weka.attributeSelection.CfsSubsetEval" : {
+        "extends" : ["$base_weka_attributeselection_config$"]
+    },
+    "weka.attributeSelection.CorrelationAttributeEval" : {
+        "extends" : ["$base_weka_attributeselection_config$"]
+    }
+    
 
 
     "Catalano.Imaging.Filters.Crop" : {

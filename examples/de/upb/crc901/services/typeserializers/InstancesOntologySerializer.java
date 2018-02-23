@@ -61,9 +61,6 @@ public class InstancesOntologySerializer implements IOntologySerializer<Instance
 					e.printStackTrace();
 					throw new RuntimeException(e);
 				}
-				System.out.println("DID binarization");
-			} else {
-				System.out.println("Skipped binarization");
 			}
 			return new JASEDataObject("LabeledInstances", WekaUtil.toJAICoreLabeledInstances(wekaInstances));
 		}
