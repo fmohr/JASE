@@ -55,11 +55,12 @@ public class WekaAttributeSelectionWrapper extends ServiceWrapper {
 		return ((AttributeSelection)delegate).reduceDimensionality(instances);
 	}
 	
-	protected void buildDelegate() {
+	@Override
+	protected void buildDelegate(final Constructor<? extends Object> delegateConstructor, final Object[] constructorValues) {
 		if(constructorValues.length != 2) {
 			throw new RuntimeException("Given length is: " +  constructorValues.length);
 		}
-		super.buildDelegate();
+		super.buildDelegate(delegateConstructor, constructorValues);
 		AttributeSelection selection = (AttributeSelection) getDelegate();
 		String asSearcherClasspath = ((JASEDataObject) constructorValues[0]).getData().toString();
 		String asEvaluatorClasspath = ((JASEDataObject) constructorValues[1]).getData().toString(); 

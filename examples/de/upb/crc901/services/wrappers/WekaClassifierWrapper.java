@@ -7,6 +7,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import de.upb.crc901.services.ExchangeTest;
+import de.upb.crc901.services.core.JASEDataObject;
 import de.upb.crc901.services.core.ServiceWrapper;
 import de.upb.crc901.services.core.TimeLogger;
 import jaicore.basic.MathExt;
@@ -15,10 +16,14 @@ import jaicore.ml.core.SimpleLabeledInstancesImpl;
 import jaicore.ml.interfaces.Instance;
 import jaicore.ml.interfaces.LabeledInstance;
 import jaicore.ml.interfaces.LabeledInstances;
+import weka.attributeSelection.ASEvaluation;
+import weka.attributeSelection.ASSearch;
+import weka.attributeSelection.AttributeSelection;
 import weka.classifiers.Classifier;
 import weka.core.Attribute;
 import weka.core.DenseInstance;
 import weka.core.Instances;
+import weka.core.OptionHandler;
 import weka.core.SparseInstance;
 import weka.core.Utils;
 
@@ -35,18 +40,36 @@ public class WekaClassifierWrapper extends ServiceWrapper {
 	public WekaClassifierWrapper(Constructor<? extends Object> delegateConstructor, Object[] values) {
 		super(delegateConstructor, values);
 
-		try {
-			freshClassifier = weka.classifiers.AbstractClassifier.makeCopy(((Classifier) super.delegate));
-		} catch (Exception e) {
-			throw new RuntimeException(e);
+	}
+	
+
+	@Override
+	protected void buildDelegate(final Constructor<? extends Object> delegateConstructor, final Object[] constructorValues){
+		// Overload the constructor of classifiers:
+		// Take every string in constructor values put it into setOptions of the inner classifier.
+		super.buildDelegate(delegateConstructor, constructorValues);
+		if(constructorValues.length == 0) {
+			return;
+		}
+		if(super.delegate instanceof  OptionHandler) {
+			// we can set it's options:
+			OptionHandler classifier = (OptionHandler) super.delegate;
+			// extract all options who are strings:
+			ArrayList<String> optionsList = new ArrayList<>();
+			for(Object arg : constructorValues) {
+				if(arg instanceof String) {
+					optionsList.add((String)arg);
+				}
+			}
+			String[] options = optionsList.toArray(new String [optionsList.size()]);
+			try {
+				classifier.setOptions(options);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
 		}
 	}
 
-	/**
-	 * A fresh copy of super.delegate right after it is created. This is used to
-	 * reset the classifier in declareClasses function.
-	 */
-	private final Classifier freshClassifier;
 
 	/** Flag that indicated weather or not declare_classes was invoked. */
 	private boolean declaredClasses = false;
@@ -144,14 +167,9 @@ public class WekaClassifierWrapper extends ServiceWrapper {
 		this.attributeList.set(attributeList.size() - 1, classAttribute); // reset the label attribute with the new
 																			// filles one
 
-		if (extendedClasses) {
-			// Reset the classifier because new labels are introduced.
-			try {
-				super.delegate = weka.classifiers.AbstractClassifier.makeCopy(freshClassifier);
-			} catch (Exception e) {
-				throw new RuntimeException(e);
-			}
-
+		if (extendedClasses && declaredClasses) {
+			// classes were declared before but now we have different labels:
+			throw new RuntimeException("Labels changed!!");
 		}
 		declaredClasses = true;
 	}

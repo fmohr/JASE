@@ -21,10 +21,10 @@ public abstract class ServiceWrapper implements Serializable{
 	
 	/** The wrapped Object. */
 	protected Object delegate;
-	/** The wrapped Object constructor. */
-	public transient final Constructor<? extends Object> delegateConstructor;
-	/** Values fed to constructor when invoking 'buildDelegate()'. */
-	protected transient final Object[] constructorValues;
+//	/** The wrapped Object constructor. */
+//	public transient final Constructor<? extends Object> delegateConstructor;
+//	/** Values fed to constructor when invoking 'buildDelegate()'. */
+//	protected transient final Object[] constructorValues;
 	
 	/** The types corresponding to the parameters of the constructor of the wrapper. */ 
 	public static final Class<?>[] CONSTRUCTOR_TYPES = {Constructor.class, Object[].class};
@@ -34,9 +34,7 @@ public abstract class ServiceWrapper implements Serializable{
 	 * @param delegateClassPath The classpath of the wrapped object. To get the specific class of the wrapped instance use: Class.forName(delegateClassPath).
 	 */
 	public ServiceWrapper(Constructor<? extends Object> delegateConstructor, Object[] values) {
-		this.delegateConstructor = delegateConstructor;
-		this.constructorValues = values;
-		this.buildDelegate();
+		this.buildDelegate(delegateConstructor, values);
 		if(this.delegate == null) {
 			// buildConstructor didn't assign the delegate field.
 			throw new NullPointerException("Delegate wasn't assigned by the 'buildDelegate()' method.");
@@ -57,13 +55,13 @@ public abstract class ServiceWrapper implements Serializable{
 	 * When overriding this method one can change the values inside the constructorValues array and call: super.buildDelegate()
 	 * buildDelegate has to set the delegate field or else errors will be thrown down the line.
 	 */
-	protected void buildDelegate() {
+	protected void buildDelegate(final Constructor<? extends Object> delegateConstructor, final Object[] constructorValues) {
 		try {
 			// check if the constructor together with the values are not null.
 			if(delegateConstructor != null && constructorValues != null) {
 				List<?> list = Arrays.asList(constructorValues);
 				Object[] parsed = new OntologicalTypeMarshallingSystem().objectArrayFromSemantic(delegateConstructor.getParameterTypes(), (List<JASEDataObject>) list);
-				delegate = this.delegateConstructor.newInstance(parsed);
+				delegate = delegateConstructor.newInstance(parsed);
 			}
 		} catch (InstantiationException | IllegalAccessException | IllegalArgumentException
 				| InvocationTargetException e) {
