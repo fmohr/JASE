@@ -86,7 +86,7 @@ public class InstancesOntologySerializer implements IOntologySerializer<Instance
 	}
 
 	public JASEDataObject serialize(Instances wekaInstances) {
-		TimeLogger.STOP_TIME("wekainstance -> labeledinstances with size: " + wekaInstances.size() + " started");
+//		TimeLogger.STOP_TIME("wekainstance -> labeledinstances with size: " + wekaInstances.size() + " started");
 		if (wekaInstances.classIndex() < 0) {
 			return new JASEDataObject("Instances", WekaUtil.toJAICoreInstances(wekaInstances));
 		}

@@ -54,5 +54,12 @@ public class JASEDataObject {
 		return type + ": " + object.toString();
 	}
 	
+	/**
+	 * Returns true if the type string of this object equals the given semantic name
+	 */
+	public boolean isofType(String semanticType) {
+		return getType().equals(semanticType);
+	}
+	
 
 }

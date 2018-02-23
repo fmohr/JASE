@@ -220,8 +220,11 @@ public class HttpServiceServer {
 				}
 
 				/* execute the whole induced composition */
+
+				int currentIndex = body.getCurrentIndex();
 				for (OperationInvocation opInv : subsequenceComp) {
 					invokeOperation(opInv, envState);
+					currentIndex++;
 				}
 				logger.info("Finished local execution. Now invoking {}", invocationToMakeFromHere);
 
@@ -229,11 +232,40 @@ public class HttpServiceServer {
 				if (invocationToMakeFromHere != null) {
 
 					/* extract vars from state that are in json (ordinary data but not service references) */
-					Map<String, Object> inputsToForward = new HashMap<>();
-					for (String key : envState.currentFieldNames()) {
-						inputsToForward.put(key, envState.retrieveField(key));
+					OperationPieces pieces = new OperationPieces(invocationToMakeFromHere.getOperation().getName());
+					ServiceCompositionResult result;
+					
+					// create a shallow copy of the state we have:
+					EnvironmentState forwardInputs = new EnvironmentState(); // forwarded to the other server
+					for(String fieldName : envState.currentFieldNames()) {
+						JASEDataObject field = envState.retrieveField(fieldName);
+						if(field.isofType("ServiceHandle")) {
+							ServiceHandle sh = (ServiceHandle) field.getData();
+							if(sh.isRemote()) { // only forward remote services
+								forwardInputs.addField(fieldName, field);
+							}
+						} else {
+							// TODO what do we need to forward?
+							forwardInputs.addField(fieldName, field);
+						}
 					}
-					ServiceCompositionResult result = clientForSubSequentCalls.callServiceOperation(invocationToMakeFromHere, comp, inputsToForward);
+					
+					HttpBody forwardBody = new HttpBody(forwardInputs, body.getComposition(), currentIndex, -1);
+					
+					if(pieces.hasHost()) {
+						result = new EasyClient().withBody(forwardBody).withHost(pieces.host).dispatch();
+					}else if(envState.containsField(pieces.getId())){
+						
+						if (!(envState.retrieveField(pieces.getId()).getData() instanceof ServiceHandle)) {
+							throw new RuntimeException("The refered object " + pieces.getId() + " was of type "
+									+ envState.retrieveField(pieces.getId()).getType());
+						}
+						ServiceHandle handler = (ServiceHandle) envState.retrieveField(pieces.getId()).getData();
+						result = new EasyClient().withBody(forwardBody).withService(handler).dispatch();
+					}
+					else {
+						throw new RuntimeException("Can't forward the rest of the message.");
+					}
 					envState.extendBy(result);
 					response += result.toString();
 					logger.info("Received answer from subsequent service.");

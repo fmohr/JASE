@@ -58,9 +58,11 @@ public class HttpServiceClient {
 
 	public ServiceCompositionResult sendRequest(String host, String operation, HttpBody body) throws IOException {
 		URL url = new URL("http://" + host + "/" + operation);
-		translateServiceHandlersRemoteToLocal(body.getState(), host);
+		translateServiceHandlers(body.getState(), host, "local");
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
-		con.setChunkedStreamingMode(100000);
+		
+		con.setChunkedStreamingMode(4096);
+		con.setRequestProperty("Content-Type", "application/json");
 		con.setRequestMethod("POST");
 		con.setDoOutput(true);
 		TimeLogger.STOP_TIME("Sending data started");
@@ -82,22 +84,26 @@ public class HttpServiceClient {
 				ex.printStackTrace();
 			}
 			ServiceCompositionResult result = new ServiceCompositionResult();
-			result.addBody(returnedBody, host);
+			translateServiceHandlers(returnedBody.getState(), "local", host);
+			result.addBody(returnedBody);
 			return result;
 		} else {
 			return null; // TODO correct error handling
 		}
 	}
 	
-	public void translateServiceHandlersRemoteToLocal(EnvironmentState envState, String hostsToChange) {
+	/**
+	 * Changes the host attribute of all servicehandlers in the given envirenment state map. 
+	 */
+	public void translateServiceHandlers(EnvironmentState envState, String from, String to) {
 		for(String field : envState.serviceHandleFieldNames()) {
 			
 			ServiceHandle serviceHandle = (ServiceHandle) envState.
 											retrieveField(field).getData();
-			if(!serviceHandle.getHost().equals(hostsToChange)) {
+			if(!serviceHandle.getHost().equals(from)) {
 				continue;
 			}
-			serviceHandle = serviceHandle.withLocalHost();
+			serviceHandle = serviceHandle.withExternalHost(to);
 			envState.addField(field, 
 					new JASEDataObject
 					(ServiceHandle.class.getSimpleName(), serviceHandle));
@@ -142,7 +148,7 @@ public class HttpServiceClient {
 			JASEDataObject parsedSemanticInput = null;
 			if(! (input instanceof JASEDataObject)) {
 				// first parse object
-				parsedSemanticInput = otms.objectToSemantic(input);
+				parsedSemanticInput = otms.allToSemantic(input, false);
 			} else {
 				parsedSemanticInput = (JASEDataObject) input; // the given input is already semantic complient.
 			}
@@ -169,7 +175,7 @@ public class HttpServiceClient {
 				throw new IllegalArgumentException("Want to execute composition with first service being " + serviceKey + ", but no service handle is given in the additional inputs.");
 			}
 			else{ 
-				ServiceHandle handle = (ServiceHandle)additionalInputs.get(serviceKey);
+				ServiceHandle handle = (ServiceHandle) additionalInputs.get(serviceKey);
 				host = handle.getHost();
 			}
 			return sendCompositionRequest(host, body);

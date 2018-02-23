@@ -39,7 +39,7 @@ public final class HttpBody {
 								MAXINDEX_FIELDNAME = "maxindex",
 								INPUTS_FIELDNAME = "inputs";
 
-	private static final String ARGLIST_FIELDNAME = "$arg_list$";
+	private static final String ARGLIST_FIELDNAME = "$arglist$";
 	
 	
 	private String composition = null;
@@ -217,7 +217,6 @@ public final class HttpBody {
 	}
 	
 	private void writeObject(JsonGenerator jsonOut, JASEDataObject jdo) throws IOException {
-
 		jsonOut.writeStartObject();
 		jsonOut.writeStringField("type", jdo.getType());
 		jsonOut.writeFieldName("data");
@@ -301,12 +300,20 @@ public final class HttpBody {
 					 if(HttpBody.ARGLIST_FIELDNAME.equals(fieldname)) {
 						 jsonIn.nextToken();
 						 while(jsonIn.nextToken() != JsonToken.END_ARRAY) {
-							 JASEDataObject jdo = readObject(jsonIn);
+							 JASEDataObject jdo;
+							 if(jsonIn.currentToken() == JsonToken.VALUE_NULL) {
+								 jdo = null; // dont read null values in
+							 } else {
+								 jdo = readObject(jsonIn);
+							 }
 							 addPositionalArgument(jdo);
 						 }
 					 } else {
 						 String keywrod = fieldname;
 						 jsonIn.nextToken();
+						 if(jsonIn.currentToken() == JsonToken.VALUE_NULL) {
+							 continue; // dont read null values in
+						 }
 						 JASEDataObject jdo = readObject(jsonIn);
 						 addKeyworkArgument(keywrod, jdo);
 					 }

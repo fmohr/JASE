@@ -1,16 +1,12 @@
 package de.upb.crc901.services.typeserializers;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import de.upb.crc901.services.core.IOntologySerializer;
 import de.upb.crc901.services.core.JASEDataObject;
 import jaicore.ml.WekaUtil;
-import jaicore.ml.core.SimpleLabeledInstanceImpl;
 import jaicore.ml.interfaces.LabeledInstance;
 import weka.core.Instance;
 import weka.core.Instances;

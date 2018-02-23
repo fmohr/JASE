@@ -34,7 +34,6 @@ dependencies {
 	compile name: 'Catalano.Statistics'
 	compile name: 'CrcServices'
 	compile name: 'JAICore'
-	compile name: 'mtj-1.0.4'
 
 	// Apache Commons
 	compile 'org.apache.commons:commons-lang3:3.5'

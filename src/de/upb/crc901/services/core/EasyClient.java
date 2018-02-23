@@ -22,6 +22,9 @@ public final class EasyClient {
 
 	public EasyClient withHost(String host) {
 		Objects.requireNonNull(host);
+		while(host.endsWith("/")){
+			host = host.substring(0, host.length()-1);
+		}
 		innerHandle = innerHandle.withExternalHost(host);
 		return this;
 	}

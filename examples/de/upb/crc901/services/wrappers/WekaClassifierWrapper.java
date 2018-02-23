@@ -164,6 +164,7 @@ public class WekaClassifierWrapper extends ServiceWrapper {
 	 *            training data
 	 */
 	public void train(LabeledInstances<String> trainingData) {
+		TimeLogger.STOP_TIME("Train method envoced");
 
 		if (trainingData.getNumberOfRows() < 1) { // no data. do nothing.
 			return; // :(

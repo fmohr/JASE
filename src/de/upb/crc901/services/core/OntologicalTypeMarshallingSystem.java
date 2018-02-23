@@ -58,7 +58,7 @@ public class OntologicalTypeMarshallingSystem {
 	private static final String NUMBER_TYPE = Number.class.getSimpleName();
 	private static final String STRING_TYPE = String.class.getSimpleName();
 	
-	
+	// a cache that maps the link between semantic and pojo objects to a flag that indicates if serialization between them is possible. used by is Link Implemented
 	private final static Map<Link, Boolean> linkExistsCache = new HashMap<>();
 	
 	/**
@@ -260,11 +260,14 @@ public class OntologicalTypeMarshallingSystem {
 			throw new IllegalArgumentException("Cannot serialize null-objects.");
 		}
 		try {
-			String serializerClassName = "de.upb.crc901.services.typeserializers." + o.getClass().getSimpleName() + "OntologySerializer";
+			String classname = o.getClass().getSimpleName();
+			String serializerClassName = "de.upb.crc901.services.typeserializers." + classname + "OntologySerializer";
 			Method method = MethodUtils.getMatchingAccessibleMethod(Class.forName(serializerClassName), "serialize", o.getClass());
 			assert method != null : "Could not find method \"serialize(" + o.getClass() + ")\" in serializer class " + serializerClassName;
 			IOntologySerializer<?> serializer = (IOntologySerializer<?>) Class.forName(serializerClassName).getConstructor().newInstance();
+			TimeLogger.STOP_TIME("Serializing " + classname + " started");
 			JASEDataObject serialization = (JASEDataObject) method.invoke(serializer, o);
+			TimeLogger.STOP_TIME("Serializing " + classname + " concluded");
 			return serialization;
 		} catch (ClassNotFoundException e) {
 			throw new UnsupportedOperationException("Cannot convert objects of type " + o.getClass().getName()
@@ -280,7 +283,8 @@ public class OntologicalTypeMarshallingSystem {
 		String type = jdo.getType();
 		/* determine serializer */
 		try {
-			Class<?> serializerClass = Class.forName("de.upb.crc901.services.typeserializers." + clazz.getSimpleName() + "OntologySerializer");
+			String classname = clazz.getSimpleName();
+			Class<?> serializerClass = Class.forName("de.upb.crc901.services.typeserializers." + classname + "OntologySerializer");
 			Method method = MethodUtils.getAccessibleMethod(serializerClass, "unserialize", JASEDataObject.class);
 			if (method == null)
 				throw new UnsupportedOperationException("Cannot convert objects of type " + type + " to a Java object of class " + clazz.getName()
@@ -290,9 +294,11 @@ public class OntologicalTypeMarshallingSystem {
 			Object rawSerializer = serializerClass.getConstructor().newInstance();
 			if (!(IOntologySerializer.class.isInstance(rawSerializer)))
 				throw new ClassCastException("The ontological serializer for " + clazz.getSimpleName() + " does not implement the IOntologySerializer interface!");
-
+			TimeLogger.STOP_TIME("Deserializing " + classname + " started");
 			/* unserialize the semantic object to an actualy required Java object */
-			return (T) method.invoke(rawSerializer, jdo);
+			T returnValue = (T) method.invoke(rawSerializer, jdo);
+			TimeLogger.STOP_TIME("Deserializing " + classname + " concluded");
+			return returnValue;
 		} catch (ClassNotFoundException e) {
 			throw new UnsupportedOperationException("Cannot convert objects of type " + type + " to a Java object of class " + clazz.getName()
 					+ ". The necessary serializer class \"de.upb.crc901.services.typeserializers." + clazz.getSimpleName() + "OntologySerializer\" was not found.");

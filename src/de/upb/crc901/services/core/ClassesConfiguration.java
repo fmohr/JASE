@@ -12,6 +12,7 @@ import java.util.function.Function;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import jaicore.basic.FileUtil;
@@ -115,8 +116,25 @@ public class ClassesConfiguration extends HashMap<String, JsonNode> {
 						// don't want to change inheritance or else funny things happen when calling resolveInheritances twice. 
 						continue;
 					}
-					JsonNode attributeContent = superConfig.get(attributeName);
-					((ObjectNode)classconfig).set(attributeName, attributeContent);
+					JsonNode superAttribute = superConfig.get(attributeName);
+					boolean extended = false; // flag that indicates that attribute has been extended.
+					if(classconfig.has(attributeName)) {
+						// first try to add the value to the array or dictionary
+						JsonNode baseAttribute = classconfig.get(attributeName);
+						if(baseAttribute.isArray() && superAttribute.isArray()) {
+							((ArrayNode) baseAttribute).addAll((ArrayNode) superAttribute);
+						} 
+						else if(baseAttribute.isObject() && baseAttribute.isObject()) {
+							((ObjectNode)baseAttribute).setAll((ObjectNode) superAttribute);
+						}
+						else {
+							System.err.println("CONFIG: Attribute " + attributeName + " is being replaced by an incompatible type from: " + superClasspath);
+						}
+					}
+					if(!extended) {
+						// couldnt add attribute, so just replace it
+						((ObjectNode)classconfig).set(attributeName, superAttribute);
+					}
 				}
 			}
 		}
@@ -242,11 +260,21 @@ public class ClassesConfiguration extends HashMap<String, JsonNode> {
 		if("__construct".equals(methodName)) {
 			return getStandardResultMap();
 		}
+		if(isWrapped(classpath)) {
+			// if the class is wrapped first look if the wrapper config is defining the result map of this method.
+			String wrapperClasspath = getWrapperClasspath(classpath);
+			if(methodKnown(wrapperClasspath, methodName)) {
+				return getMethodResultMap(wrapperClasspath, methodName);
+			}
+		}
 		JsonNode classConfig = getClassConfiguration(classpath);
 		if (classConfig.has("methods")) {
 			JsonNode methods = classConfig.get("methods");
 			if(!methods.isArray()) { // if its not an array it's method may define mapping
 				JsonNode method = classConfig.get("methods").get(methodName);
+				if(method == null) {
+					return null;
+				}
 				if(!method.isTextual() && method.has("resultmap")){
 					// result map was defined
 					TypeReference<HashMap<String,String>> typeRef = new TypeReference<HashMap<String,String>>() {};

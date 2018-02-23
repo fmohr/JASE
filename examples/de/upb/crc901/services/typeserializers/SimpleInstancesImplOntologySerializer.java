@@ -23,7 +23,7 @@ public class SimpleInstancesImplOntologySerializer implements IOntologySerialize
 
 	@Override
 	public JASEDataObject serialize(Instances object) {
-		String type = "Instnace";
+		String type = "Instances";
 		JASEDataObject jdo = new JASEDataObject(type, object);
 		return jdo;
 	}

@@ -126,7 +126,7 @@ public final class EnvironmentState {
 		return () ->
 				new FilteredIterator<String>(
 					currentFieldNames().iterator(),  	// iterator of all current fieldnames
-					(s -> retrieveField(s).getData() instanceof ServiceHandle )); 			// filter out every fieldname that was is a index field.
+					(s -> s != null && retrieveField(s).getData() instanceof ServiceHandle )); 			// filter out every fieldname that was is a index field.
 	}
 	
 	
@@ -135,6 +135,9 @@ public final class EnvironmentState {
 	 * Adds the given JASEDataObject to the state with the given field name.
 	 */
 	public void addField(String newFieldName, JASEDataObject newVar) {
+		if(newVar == null) {
+			return;
+		}
 		if(isIndexField(newFieldName)) { // a positional field is trying to be added:
 			int index = indexFromField(newFieldName);
 			if(index<=0) {
@@ -162,19 +165,32 @@ public final class EnvironmentState {
 		while(positionalArgumentCounter < index) {
 			positionalArgumentCounter++;
 		}
-		envState.put(indexToField(index), newVar);
+		if(newVar!=null) {
+			envState.put(indexToField(index), newVar);
+		}
 	}
-	
-	public String indexToField(int index) {
+	/**
+	 * This method contains the functional mapping from indices to fieldnames.
+	 * TODO the offset of 1 between fieldname and fieldindex should be contained in this method.
+	 */
+	private String indexToField(int index) {
 		return "i" + index;
 	}
-	public int indexFromField(String indexField) {
+
+	/**
+	 * This method contains the functional mapping from fieldname to indices.
+	 * TODO the offset of 1 between fieldname and fieldindex should be contained in this method.
+	 */
+	private int indexFromField(String indexField) {
 		if(isIndexField(indexField)) {
 			return Integer.parseInt(indexField.substring(1));
 		}else {
 			throw new RuntimeException("Can't translate " + indexField + " to index.");
 		}
 	}
+	/**
+	 * Checks if the fieldname is a index field.
+	 */
 	public boolean isIndexField(String field) {
 		return field.matches("^i\\d+$");
 	}
@@ -227,14 +243,22 @@ public final class EnvironmentState {
 		return true;
 	}
 
+	/**
+	 * Returns the pointer to the current map.
+	 * @deprecated Will be removed to prohibit access to the map itself. 
+	 * That's because a environment by definition doesn't lose fields. 
+	 * Exposing the pointer to the map may lead to bugs.
+	 */
 	public Map<String, JASEDataObject> getCurrentMap() {
 		return envState;
 	}
-
+	
+	/**
+	 * Extends the fields of this map by the given one.
+	 */
 	public void extendBy(HashMap<String, JASEDataObject> map) {
 		for(String keyString : map.keySet()) {
 			addField(keyString, map.get(keyString));
 		}
 	}
-
 }

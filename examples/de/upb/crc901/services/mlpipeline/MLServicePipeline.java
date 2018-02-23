@@ -39,7 +39,7 @@ public class MLServicePipeline implements Classifier {
 			
 			
 			classifierTmp = new EasyClient()
-					.withHost(hostname, port)
+					.withHost(hostname, 5000)
 					.withClassPath(classifierName)
 					.createService();
 			
@@ -102,7 +102,7 @@ public class MLServicePipeline implements Classifier {
 	public static void main(String[] args) throws Throwable {
 		int port = 8000;
 		HttpServiceServer server = new HttpServiceServer(port);
-		MLServicePipeline pl = new MLServicePipeline("localhost", port, "weka.classifiers.lazy.IBk");
+		MLServicePipeline pl = new MLServicePipeline("localhost", port, "sklearn.ensemble.RandomForestClassifier");
 		
 		
 		
