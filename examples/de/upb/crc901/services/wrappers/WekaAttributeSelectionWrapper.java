@@ -23,7 +23,7 @@ public class WekaAttributeSelectionWrapper extends ServiceWrapper {
 	private Attribute cachedClassAttribute;
 	private Instances cachedInstances;
 	
-	public WekaAttributeSelectionWrapper(Constructor<? extends Object> delegateConstructor, Object[] values) {
+	public WekaAttributeSelectionWrapper(Constructor<? extends Object> delegateConstructor, JASEDataObject[] values) {
 		super(delegateConstructor, values);
 	}
 	
@@ -57,7 +57,7 @@ public class WekaAttributeSelectionWrapper extends ServiceWrapper {
 	}
 	
 	@Override
-	protected void buildDelegate(final Constructor<? extends Object> delegateConstructor, final Object[] constructorValues) {
+	protected void buildDelegate(final Constructor<? extends Object> delegateConstructor, final JASEDataObject[] constructorValues) {
 		if(constructorValues.length < 2) {
 			throw new RuntimeException("Given length is: " +  constructorValues.length);
 		}
@@ -65,13 +65,13 @@ public class WekaAttributeSelectionWrapper extends ServiceWrapper {
 		AttributeSelection selection = (AttributeSelection) getDelegate();
 		int parameterIndex = 0;
 		
-		String asSearcherClasspath = ((JASEDataObject) constructorValues[parameterIndex]).getData().toString();
+		String asSearcherClasspath = constructorValues[parameterIndex].getData().toString();
 		parameterIndex ++;
 		// now the 2nd value might be options for the searcher:
 		String[] searcherOptions;
-		if(((JASEDataObject) constructorValues[parameterIndex]).isofType("StringList")){
+		if(constructorValues[parameterIndex].isofType("StringList")){
 			@SuppressWarnings("unchecked")
-			List<String> optionList = (List<String>) ((JASEDataObject) constructorValues[parameterIndex]).getData();
+			List<String> optionList = (List<String>) constructorValues[parameterIndex].getData();
 			searcherOptions = optionList.toArray(new String[optionList.size()]);
 			parameterIndex++;
 		}
@@ -79,18 +79,20 @@ public class WekaAttributeSelectionWrapper extends ServiceWrapper {
 			searcherOptions = new String[0];
 		}
 		// the next arguemtn is the classname of the evaluator
-		String asEvaluatorClasspath = ((JASEDataObject) constructorValues[parameterIndex]).getData().toString(); 
+		String asEvaluatorClasspath = constructorValues[parameterIndex].getData().toString(); 
 		parameterIndex++;
 		
 		// the one after, if specified, is the options of evaluator
 		String[] evalOptions;
-		if(constructorValues.length>parameterIndex && ((JASEDataObject) constructorValues[parameterIndex]).isofType("StringList")) {
-			List<String> optionList = (List<String>) ((JASEDataObject) constructorValues[parameterIndex]).getData();
+		if(constructorValues.length>parameterIndex &&  constructorValues[parameterIndex].isofType("StringList")) {
+			List<String> optionList = (List<String>)  constructorValues[parameterIndex].getData();
 			evalOptions = optionList.toArray(new String[optionList.size()]);
 		}
 		else {
 			evalOptions = new String[0];
 		}
+		
+		// now set the search and eval classes
 		try {
 			ASSearch asSearch = ASSearch.forName(asSearcherClasspath, searcherOptions);
 			selection.setSearch(asSearch);

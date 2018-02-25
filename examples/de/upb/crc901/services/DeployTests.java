@@ -4,6 +4,7 @@ import de.upb.crc901.configurationsetting.operation.SequentialComposition;
 import de.upb.crc901.configurationsetting.serialization.SequentialCompositionSerializer;
 import de.upb.crc901.services.core.HttpServiceClient;
 import de.upb.crc901.services.core.HttpServiceServer;
+import de.upb.crc901.services.core.JASEDataObject;
 import de.upb.crc901.services.core.OntologicalTypeMarshallingSystem;
 import de.upb.crc901.services.core.ServiceCompositionResult;
 import de.upb.crc901.services.core.ServiceHandle;
@@ -199,7 +200,7 @@ public class DeployTests {
       System.out.println("Total Time for parsing data, weka -> JAICore: " + parsingTime + " ms");
 
       startTime = System.currentTimeMillis();
-      WekaClassifierWrapper localWrapper = new WekaClassifierWrapper(RandomTree.class.getConstructor(), new Object[0]);
+      WekaClassifierWrapper localWrapper = new WekaClassifierWrapper(RandomTree.class.getConstructor(), new JASEDataObject[0]);
       localWrapper.train(parsedTrainSet);
       List<String> predictionsLocalWrapper = localWrapper.predict(parsedTestSet);
       long localWrapperTime = (System.currentTimeMillis() - startTime);

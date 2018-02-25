@@ -37,22 +37,26 @@ public class WekaClassifierWrapper extends ServiceWrapper {
 
 	// Simply use the base constructor if the 'constructor' of the wrapped service
 	// shall not change.
-	public WekaClassifierWrapper(Constructor<? extends Object> delegateConstructor, Object[] values) {
+	public WekaClassifierWrapper(Constructor<? extends Object> delegateConstructor, JASEDataObject[] values) {
 		super(delegateConstructor, values);
 
 	}
 	
 
 	@Override
-	protected void buildDelegate(final Constructor<? extends Object> delegateConstructor, final Object[] constructorValues){
+	protected void buildDelegate(final Constructor<? extends Object> delegateConstructor, final JASEDataObject[] constructorValues){
 		// Overload the constructor of classifiers:
 		// Take every string in constructor values put it into setOptions of the inner classifier.
 		super.buildDelegate(delegateConstructor, constructorValues);
 		if(constructorValues.length == 0) {
 			return;
 		}
-		if(super.delegate instanceof  OptionHandler) {
-			// we can set it's options:
+
+		if(! (super.delegate instanceof  OptionHandler)){
+			// if the classifier doesn't have 'setOptions' exit:
+			return;
+		}
+		for(Object value : constructorValues) {
 			OptionHandler classifier = (OptionHandler) super.delegate;
 			// extract all options who are strings:
 			ArrayList<String> optionsList = new ArrayList<>();

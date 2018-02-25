@@ -1,15 +1,23 @@
 package de.upb.crc901.services.core;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
 import java.util.function.Function;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.impl.Log4jLoggerFactory;
+
+import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -29,24 +37,65 @@ public class ClassesConfiguration extends HashMap<String, JsonNode> {
 	 * 
 	 */
 	private static final long serialVersionUID = 1L;
+	
+	
+	private Map<String, JsonNode> rawConfiguration = new HashMap<>();
+	
+	private static final Logger log = LoggerFactory.getLogger(HttpServiceServer.class);
 
 	/**
-	 * Reads the cofiguration file from configPath into this map.
-	 * @param configPath Filepath to configuration
-	 * @throws IOException If the file can't be read or there is problems with parsing the content.
+	 * Reads the cofiguration files from configPaths and appends them into itself..
 	 */
-	public ClassesConfiguration(String configPath) throws IOException {
-		super();
-		String jsonString = FileUtil.readFileAsString(configPath);
-		TypeReference<HashMap<String,JsonNode>> typeRef = new TypeReference<HashMap<String,JsonNode>>() {};
-
-        ObjectMapper mapper = new ObjectMapper(); 
-        HashMap<String,JsonNode> o = mapper.readValue(jsonString, typeRef);
-        // put classes into this hashmap
-        this.putAll(o);
-        // resolve inheritance
-        this.resolveInheritances();
+	public ClassesConfiguration(String... configPaths) throws IOException {
+		this();
+		appendConfigFromFiles(configPaths);
 	}
+	
+	public ClassesConfiguration() {
+		super();
+	}
+
+	/**
+	 * Appends class configurations from files to the existing ones.
+	 */
+	public void appendConfigFromFiles(String... configFiles) throws IOException  {
+		if(configFiles.length == 0) {
+			return;
+		}
+		List<String> jsonStringList = new ArrayList<>(configFiles.length);
+		for(String filePath : configFiles) {
+			try {
+				String jsonString = FileUtil.readFileAsString(filePath);
+				jsonStringList.add(jsonString);
+			} catch( IOException e) {
+				log.error("Exception when reading file {}: {}", filePath, e.getMessage());;
+			}
+		}
+		String[]  jsonStringArr = jsonStringList.toArray(new String[jsonStringList.size()]);
+		this.appendConfigFromJsonStrings(jsonStringArr);
+	}
+	
+	/**
+	 * Appends class configurations from json-strings to the existing ones.
+	 */
+	public void appendConfigFromJsonStrings(String... jsonStrings) throws IOException {
+		if(jsonStrings.length == 0) {
+			return;
+		}
+		TypeReference<HashMap<String,JsonNode>> typeRef = new TypeReference<HashMap<String,JsonNode>>() {};
+        ObjectMapper mapper = new ObjectMapper(); 
+        for(String jsonString : jsonStrings) {
+        		// iterate over configs and append them to the existing configuration
+            HashMap<String,JsonNode> loadedConfig = mapper.readValue(jsonString, typeRef);
+            rawConfiguration.putAll(loadedConfig);
+        }
+        // reset this configuration, in order to call resolveInheritances on a un extended configurations
+		this.clear(); // clear all configurations.
+        this.putAll(rawConfiguration);
+        this.resolveInheritances();
+		
+	}
+	
 	/**
 	 * Resolves the 'extends' attribute from classes.
 	 * A class can define an 'extends' array filled with other classes from the configuration.

@@ -5,6 +5,7 @@ import de.upb.crc901.services.core.HttpServiceServer;
 import de.upb.crc901.services.core.OntologicalTypeMarshallingSystem;
 import de.upb.crc901.services.core.ServiceCompositionResult;
 import de.upb.crc901.services.core.ServiceHandle;
+import de.upb.crc901.services.mlpipeline.MLPipelinePlan;
 import de.upb.crc901.services.mlpipeline.MLServicePipeline;
 
 import jaicore.ml.WekaUtil;
@@ -84,8 +85,10 @@ public class WekaConfigTests {
     List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .9f);
     Set<String> errorSet = new HashSet<>();
     for (String wekaClassifierClasspath : server.getClassesConfig().allSubconfigs(baseClassifierConfigName)) {
-      try {
-        MLServicePipeline pl = new MLServicePipeline("localhost", PORT, wekaClassifierClasspath, new LinkedList<>());
+      try { 
+    	  	MLPipelinePlan plan = new MLPipelinePlan().onHost("localhost", PORT);
+    	  	plan.setClassifier(wekaClassifierClasspath);
+        MLServicePipeline pl = new MLServicePipeline(plan);
 
         pl.buildClassifier(split.get(0));
 

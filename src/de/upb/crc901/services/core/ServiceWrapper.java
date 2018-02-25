@@ -27,13 +27,13 @@ public abstract class ServiceWrapper implements Serializable{
 //	protected transient final Object[] constructorValues;
 	
 	/** The types corresponding to the parameters of the constructor of the wrapper. */ 
-	public static final Class<?>[] CONSTRUCTOR_TYPES = {Constructor.class, Object[].class};
+	public static final Class<?>[] CONSTRUCTOR_TYPES = {Constructor.class, JASEDataObject[].class};
 	/**
 	 * Creates the base wrapper.
 	 * @param delegate The wrapped object. Methods which aren't defined are delegated to this object.
 	 * @param delegateClassPath The classpath of the wrapped object. To get the specific class of the wrapped instance use: Class.forName(delegateClassPath).
 	 */
-	public ServiceWrapper(Constructor<? extends Object> delegateConstructor, Object[] values) {
+	public ServiceWrapper(Constructor<? extends Object> delegateConstructor, JASEDataObject[] values) {
 		this.buildDelegate(delegateConstructor, values);
 		if(this.delegate == null) {
 			// buildConstructor didn't assign the delegate field.
@@ -55,7 +55,7 @@ public abstract class ServiceWrapper implements Serializable{
 	 * When overriding this method one can change the values inside the constructorValues array and call: super.buildDelegate()
 	 * buildDelegate has to set the delegate field or else errors will be thrown down the line.
 	 */
-	protected void buildDelegate(final Constructor<? extends Object> delegateConstructor, final Object[] constructorValues) {
+	protected void buildDelegate(final Constructor<? extends Object> delegateConstructor, final JASEDataObject[] constructorValues) {
 		try {
 			// check if the constructor together with the values are not null.
 			if(delegateConstructor != null && constructorValues != null) {

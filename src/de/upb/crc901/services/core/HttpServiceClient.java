@@ -60,8 +60,8 @@ public class HttpServiceClient {
 		URL url = new URL("http://" + host + "/" + operation);
 		translateServiceHandlers(body.getState(), host, "local");
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
-		
-		con.setChunkedStreamingMode(4096);
+		con.setConnectTimeout(2000);
+		con.setChunkedStreamingMode(1<<20); // 1 MByte buffer
 		con.setRequestProperty("Content-Type", "application/json");
 		con.setRequestMethod("POST");
 		con.setDoOutput(true);

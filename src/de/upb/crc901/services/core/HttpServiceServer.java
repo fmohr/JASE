@@ -451,7 +451,7 @@ public class HttpServiceServer {
 				Constructor<? extends ServiceWrapper> wrapperConstructor = (Constructor<? extends ServiceWrapper>)
 						wrapperClass.getConstructor(ServiceWrapper.CONSTRUCTOR_TYPES);
 				// create the wrapper by giving it the constructor and the values.
-				Object[] boxedArgs = inputList.toArray();
+				JASEDataObject[] boxedArgs = inputList.toArray(new JASEDataObject[inputList.size()]);
 				if(boxedArgs.length > 0) {
 					wrapper = wrapperConstructor.newInstance(constructor, boxedArgs);	
 				} else {
@@ -688,17 +688,17 @@ public class HttpServiceServer {
 	}
 
 	public HttpServiceServer(int port) throws IOException {
-		this(port, "conf/classes.json");
+		this(port, "conf/classifiers.json", "conf/preprocessors.json", "conf/others.json");
 	}
 	
 	/**
 	 * Creates the standard test server.
 	 */
 	public static HttpServiceServer TEST_SERVER() throws IOException {
-		return new HttpServiceServer(8000, "testrsc/conf/classes.json");
+		return new HttpServiceServer(8000, "testrsc/conf/classifiers.json", "testrsc/conf/preprocessors.json", "testrsc/conf/others.json");
 	}
 
-	public HttpServiceServer(int port, String FILE_CONF_CLASSES) throws IOException {
+	public HttpServiceServer(int port, String... FILE_CONF_CLASSES) throws IOException {
 		/* moved the operation configuration into the classes.json configuration for more flexibility.*/
 		this.classesConfig = new ClassesConfiguration(FILE_CONF_CLASSES);
 		otms = new OntologicalTypeMarshallingSystem();
@@ -714,7 +714,8 @@ public class HttpServiceServer {
 	}
 
 	public static void main(String[] args) throws Exception {
-		new HttpServiceServer(8000);
+//		new HttpServiceServer(8000);
+		TEST_SERVER();
 	}
 
 	public ClassesConfiguration getClassesConfig() {

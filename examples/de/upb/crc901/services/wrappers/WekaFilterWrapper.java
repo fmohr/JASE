@@ -2,6 +2,7 @@ package de.upb.crc901.services.wrappers;
 
 import java.lang.reflect.Constructor;
 
+import de.upb.crc901.services.core.JASEDataObject;
 import de.upb.crc901.services.core.ServiceWrapper;
 import jaicore.ml.WekaUtil;
 import jaicore.ml.core.SimpleInstancesImpl;
@@ -17,7 +18,7 @@ public class WekaFilterWrapper extends ServiceWrapper{
 	 */
 	private static final long serialVersionUID = 1L;
 
-	public WekaFilterWrapper(Constructor<? extends Object> delegateConstructor, Object[] values) {
+	public WekaFilterWrapper(Constructor<? extends Object> delegateConstructor, JASEDataObject[] values) {
 		super(delegateConstructor, values);
 	}
 	

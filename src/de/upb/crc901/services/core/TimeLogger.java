@@ -11,7 +11,7 @@ public class TimeLogger {
 
 	private static long timestart = System.currentTimeMillis();
 	
-	public static void STOP_TIME(String label) {
+	public synchronized static void STOP_TIME(String label) {
 		long difference = System.currentTimeMillis() - TimeLogger.timestart;
 		String msg = "-->\t" + label + ":\n\t\t\t" + difference + " ms";
 		log.debug(msg);
