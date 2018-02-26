@@ -109,6 +109,8 @@ public class MLServicePipeline implements Classifier {
 			e.printStackTrace();
 		}
 		
+		// Service creation done! 
+		
 		for (String fieldname : servicesContainer.serviceHandleFieldNames()) {
 			ServiceHandle sh = (ServiceHandle) servicesContainer
 					.retrieveField(fieldname).getData();
@@ -143,11 +145,9 @@ public class MLServicePipeline implements Classifier {
 		// create train composition
 		for(String ppFieldname : PPFieldNames) {
 			String dataOutFieldName = "data"+invocationNumber;
-			trainEC.withAddedMethodOperation("empty", ppFieldname, "SelectAttributes", dataInFieldName);
-			trainEC.withAddedMethodOperation(dataOutFieldName, ppFieldname, "reduceDimensionality", dataInFieldName);
-			// out put of this pipe it the input of the next one:
+			trainEC.withAddedMethodOperation(dataOutFieldName, ppFieldname, "preprocess", dataInFieldName);
+			// output of this pipe is the input of the next one:
 			dataInFieldName = dataOutFieldName;
-			// create output name for the next data
 			invocationNumber++;
 		}
 		trainEC.withAddedMethodOperation("empty", classifierFieldName, "train", dataInFieldName);
@@ -182,7 +182,7 @@ public class MLServicePipeline implements Classifier {
 		// create train composition
 		for(String ppFieldname : PPFieldNames) {
 			String dataOutFieldName = "data"+invocationNumber;
-			predictEC.withAddedMethodOperation(dataOutFieldName, ppFieldname, "reduceDimensionality", dataInFieldName);
+			predictEC.withAddedMethodOperation(dataOutFieldName, ppFieldname, "preprocess", dataInFieldName);
 			// out put of this pipe it the input of the next one:
 			dataInFieldName = dataOutFieldName;
 			// create output name for the next data
@@ -233,19 +233,23 @@ public class MLServicePipeline implements Classifier {
 			// create a ml pp plan:
 			MLPipelinePlan plan = new MLPipelinePlan();
 			// add attribute selections:
-			plan.onHost("localhost", jasePort);
+			
+			String jaseHost = "localhost:" + jasePort;
+			String paseHost = "localhost:" + 5000;
+			
+			plan.onHost(paseHost).addAttributeSelection("sklearn.preprocessing.Imputer").addOptions("-strategy \"median\"", "-axis 0");
+			
+			plan.onHost(jaseHost);
+			
 			plan.addWekaAttributeSelection() .withSearcher("weka.attributeSelection.Ranker")
 										.withEval("weka.attributeSelection.CorrelationAttributeEval");
 
 			plan.addWekaAttributeSelection() .withSearcher("weka.attributeSelection.Ranker")
 										.withEval("weka.attributeSelection.ReliefFAttributeEval");
 
-			plan.onHost("localhost", 5000).addAttributeSelection("sklearn.feature_selection.VarianceThreshold");
+			plan.onHost(paseHost).addAttributeSelection("sklearn.feature_selection.VarianceThreshold");
 			
-
-			plan.onHost("localhost", 5000);
-			
-			plan.setClassifier("sklearn.linear_model.SGDClassifier");
+			plan.setClassifier("tflib.NeuralNet");
 			
 
 			System.out.println("Create MLServicePipeline with classifier and "
