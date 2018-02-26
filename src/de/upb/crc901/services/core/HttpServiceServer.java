@@ -455,7 +455,7 @@ public class HttpServiceServer {
 				if(boxedArgs.length > 0) {
 					wrapper = wrapperConstructor.newInstance(constructor, boxedArgs);	
 				} else {
-					wrapper = wrapperConstructor.newInstance(constructor, new Object[0]);
+					wrapper = wrapperConstructor.newInstance(constructor, new JASEDataObject[0]);
 				}
 				newService = wrapper.getDelegate();
 			}

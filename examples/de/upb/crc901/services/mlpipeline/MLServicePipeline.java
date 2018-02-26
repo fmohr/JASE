@@ -1,25 +1,22 @@
 package de.upb.crc901.services.mlpipeline;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Random;
+
 import de.upb.crc901.services.core.EasyClient;
 import de.upb.crc901.services.core.EnvironmentState;
 import de.upb.crc901.services.core.HttpServiceServer;
 import de.upb.crc901.services.core.OntologicalTypeMarshallingSystem;
 import de.upb.crc901.services.core.ServiceCompositionResult;
 import de.upb.crc901.services.core.ServiceHandle;
-import de.upb.crc901.services.mlpipeline.MLPipelinePlan.AttributeSelectionPipe;
+import de.upb.crc901.services.mlpipeline.MLPipelinePlan.MLPipe;
+import de.upb.crc901.services.mlpipeline.MLPipelinePlan.WekaAttributeSelectionPipe;
 import jaicore.ml.WekaUtil;
-
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-
 import weka.classifiers.Classifier;
 import weka.core.Capabilities;
 import weka.core.Instance;
@@ -44,30 +41,43 @@ public class MLServicePipeline implements Classifier {
 		int varIDCounter = 1;
 		EasyClient constructorEC = new EasyClient().withOTMS(otms);
 		// build composition
-		for (AttributeSelectionPipe attrPipe : plan.getAttrSelections()) {
+		for (MLPipe attrPipe : plan.getAttrSelections()) {
 			String ppFieldName = "service" + varIDCounter;
 			PPFieldNames.add(ppFieldName);
-
-			String searcherFieldName = "searcher" + varIDCounter;
-			String searchOptions = "searcherOptions" + varIDCounter;
-			
-			String evalFieldName = "eval" + varIDCounter;
-			String evalOptions = "evalOptions" + varIDCounter;
 			
 			// set host of the attribute selection
 			constructorEC.withHost(attrPipe.getHost());
 			
-			// add inputs from attribute selection
-			constructorEC	.withKeywordArgument(searcherFieldName, attrPipe.getSearcher())
-							.withKeywordArgument(evalFieldName, attrPipe.getEval())
-							
-							.withKeywordArgument(searchOptions, attrPipe.getSearcherOptions())
-							.withKeywordArgument(evalOptions, attrPipe.getEvalOptions());
+			if(attrPipe instanceof WekaAttributeSelectionPipe) {
+				WekaAttributeSelectionPipe wekaASPipe = (WekaAttributeSelectionPipe) attrPipe;
+				String searcherFieldName = "searcher" + varIDCounter;
+				String searchOptions = "searcherOptions" + varIDCounter;
+				
+				String evalFieldName = "eval" + varIDCounter;
+				String evalOptions = "evalOptions" + varIDCounter;
+				
+				
+				// add inputs from attribute selection
+				constructorEC	.withKeywordArgument(searcherFieldName, wekaASPipe.getSearcher())
+								.withKeywordArgument(evalFieldName, wekaASPipe.getEval())
+								
+								.withKeywordArgument(searchOptions, wekaASPipe.getSearcherOptions())
+								.withKeywordArgument(evalOptions, wekaASPipe.getEvalOptions());
 
-			// add a construction line to the composition
-			constructorEC.withAddedConstructOperation(ppFieldName, // output field name of the created servicehandle
-					"weka.attributeSelection.AttributeSelection", // classpath of the preprocessor
-					searcherFieldName, searchOptions, evalFieldName, evalOptions);
+				// add a construction line to the composition
+				constructorEC.withAddedConstructOperation(ppFieldName, // output field name of the created servicehandle
+						attrPipe.getName(), // classpath of the preprocessor
+						searcherFieldName, searchOptions, evalFieldName, evalOptions);
+			} 
+			else {
+				constructorEC.withKeywordArgument("asOptions" + varIDCounter, attrPipe.getOptions());
+				// add a construction line to the composition
+				constructorEC.withAddedConstructOperation(ppFieldName, // output field name of the created servicehandle
+						attrPipe.getName(), // classpath of the preprocessor
+						"asOptions" + varIDCounter);
+			
+			}
+
 
 			varIDCounter++;
 		}
@@ -84,9 +94,15 @@ public class MLServicePipeline implements Classifier {
 				 plan.getClassifierPipe().getName(), // classpath of the classifier
 				 classifierOptions); // no args for the classifier construct
 		
+		//set the host to the first service:
+		if(!plan.getAttrSelections().isEmpty()) {
+			constructorEC.withHost(plan.getAttrSelections().get(0).getHost());
+		}
+		 
 		try {
 			// send server request:
 			System.out.println("Sending the following construct composition:\n" + constructorEC.getCurrentCompositionText());
+			
 			ServiceCompositionResult result = constructorEC.dispatch(); 
 			servicesContainer.extendBy(result); // add the services to out state
 		} catch (IOException e) {
@@ -218,19 +234,18 @@ public class MLServicePipeline implements Classifier {
 			MLPipelinePlan plan = new MLPipelinePlan();
 			// add attribute selections:
 			plan.onHost("localhost", jasePort);
-			plan.addAttributeSelection() .withSearcher("weka.attributeSelection.Ranker")
-										.withEval("weka.attributeSelection.PrincipalComponents");
+			plan.addWekaAttributeSelection() .withSearcher("weka.attributeSelection.Ranker")
+										.withEval("weka.attributeSelection.CorrelationAttributeEval");
 
-			plan.addAttributeSelection() .withSearcher("weka.attributeSelection.Ranker")
-										.withEval("weka.attributeSelection.PrincipalComponents");
+			plan.addWekaAttributeSelection() .withSearcher("weka.attributeSelection.Ranker")
+										.withEval("weka.attributeSelection.ReliefFAttributeEval");
 
-			plan.addAttributeSelection() .withSearcher("weka.attributeSelection.Ranker")
-										.withEval("weka.attributeSelection.PrincipalComponents");
+			plan.onHost("localhost", 5000).addAttributeSelection("sklearn.feature_selection.VarianceThreshold");
 			
 
-			plan.onHost("localhost", jasePort);
+			plan.onHost("localhost", 5000);
 			
-			plan.setClassifier("weka.classifiers.rules.DecisionTable");
+			plan.setClassifier("sklearn.linear_model.SGDClassifier");
 			
 
 			System.out.println("Create MLServicePipeline with classifier and "
@@ -241,7 +256,7 @@ public class MLServicePipeline implements Classifier {
 			Instances wekaInstances = new Instances(new BufferedReader(
 					new FileReader("../CrcTaskBasedConfigurator/testrsc"
 							+ File.separator + "polychotomous" + File.separator
-							+ "audiology.arff")));
+							+ "semeion.arff")));
 			wekaInstances.setClassIndex(wekaInstances.numAttributes() - 1);
 			List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances,
 					new Random(0), .7f);

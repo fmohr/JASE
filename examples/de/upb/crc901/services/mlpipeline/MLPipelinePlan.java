@@ -18,10 +18,10 @@ import java.util.TreeSet;
  */
 public class MLPipelinePlan {
 	// list of preprocessors
-	private List<AttributeSelectionPipe> atrPipes = new LinkedList<>();
+	private List<MLPipe> atrPipes = new LinkedList<>();
 	
 	// Points to the end of the pipeline.
-	private ClassifierPipe cPipe;
+	private MLPipe cPipe;
 
 	// contains the host name of the next added pipeline.
 	private String nextHost;
@@ -35,16 +35,24 @@ public class MLPipelinePlan {
 		return onHost(host + ":" + port);
 	}
 	
-	public AttributeSelectionPipe addAttributeSelection() {
+
+	public MLPipe addAttributeSelection(String classname) {
 		Objects.requireNonNull(this.nextHost, "Host needs to be specified before adding pipes to the pipeline.");
-		AttributeSelectionPipe asPipe =  new AttributeSelectionPipe(this.nextHost);
+		MLPipe asPipe =  new MLPipe(this.nextHost, Objects.requireNonNull(classname));
 		atrPipes.add(asPipe); // add to pipe list before returning.
 		return asPipe;
 	}
 	
-	public ClassifierPipe setClassifier(String classifierName) {
+	public WekaAttributeSelectionPipe addWekaAttributeSelection() {
 		Objects.requireNonNull(this.nextHost, "Host needs to be specified before adding pipes to the pipeline.");
-		this.cPipe = new ClassifierPipe(this.nextHost, classifierName); // set cPipe field.
+		WekaAttributeSelectionPipe asPipe =  new WekaAttributeSelectionPipe(this.nextHost);
+		atrPipes.add(asPipe); // add to pipe list before returning.
+		return asPipe;
+	}
+	
+	public MLPipe setClassifier(String classifierName) {
+		Objects.requireNonNull(this.nextHost, "Host needs to be specified before adding pipes to the pipeline.");
+		this.cPipe = new MLPipe(this.nextHost, classifierName); // set cPipe field.
 		return cPipe;
 	}
 	
@@ -55,7 +63,7 @@ public class MLPipelinePlan {
 		if(cPipe == null) { // if classifier is null return false immediately
 			return false;
 		}
-		for(AttributeSelectionPipe pipe : atrPipes) { 
+		for(MLPipe pipe : atrPipes) { 
 			if(!pipe.isValid()) {
 				return false;
 			}
@@ -63,11 +71,11 @@ public class MLPipelinePlan {
 		return true;
 	}
 	
-	public List<AttributeSelectionPipe> getAttrSelections(){
+	public List<MLPipe> getAttrSelections(){
 		return atrPipes;
 	}
 	
-	public ClassifierPipe getClassifierPipe() {
+	public MLPipe getClassifierPipe() {
 		return cPipe;
 	}
 	
@@ -84,19 +92,24 @@ public class MLPipelinePlan {
 		protected String getHost() {
 			return this.host;
 		}
+
+		protected boolean isValid() {
+			return true;
+		}
 	}
 	
-	class ClassifierPipe extends AbstractPipe {
+	class MLPipe extends AbstractPipe {
 		private final String classifierName;
 		private final Set<String> classifierOptions = new TreeSet<>();
 		private final List<Object> constructorArgs = new ArrayList<>(); 
 		
-		protected ClassifierPipe(String hostname, String classifierName) {
+		protected MLPipe(String hostname, String classifierName) {
 			super(hostname);
 			this.classifierName = Objects.requireNonNull(classifierName);
 		}
 		
-		public ClassifierPipe addOptions(String...additionalOptions) {
+
+		public MLPipe addOptions(String...additionalOptions) {
 			Objects.requireNonNull(additionalOptions);
 			for(String newOption : additionalOptions) {
 				classifierOptions.add(newOption);
@@ -104,7 +117,7 @@ public class MLPipelinePlan {
 			return this;
 		}
 		
-		public ClassifierPipe addConstructorArgs(Object... args) {
+		public MLPipe addConstructorArgs(Object... args) {
 			Objects.requireNonNull(args);
 			for(Object newArg : args) {
 				this.constructorArgs.add(newArg);
@@ -125,32 +138,32 @@ public class MLPipelinePlan {
 		}
 		
 	}
-	
-	class AttributeSelectionPipe extends AbstractPipe {
+
+	class WekaAttributeSelectionPipe extends MLPipe {
 		private String searcherName, evalName; 
-		String bla = "weka.attributeSelection.AttributeSelection";
-		protected AttributeSelectionPipe(String host) {
-			super(host);
+		public static final String classname = "weka.attributeSelection.AttributeSelection";
+		protected WekaAttributeSelectionPipe(String host) {
+			super(host, classname);
 		}
 		private Set<String> 	searcherOptions = new TreeSet<>(), 
 							evalOptions = new TreeSet<>();
 		
-		public AttributeSelectionPipe withSearcher(String searcherName) {
+		public WekaAttributeSelectionPipe withSearcher(String searcherName) {
 			this.searcherName = Objects.requireNonNull(searcherName);
 			return this;
 		} 
 		
-		public AttributeSelectionPipe withEval(String evaluator) {
+		public WekaAttributeSelectionPipe withEval(String evaluator) {
 			this.evalName = Objects.requireNonNull(evaluator);
 			return this;
 		}
 
-		public AttributeSelectionPipe addSearchOptions(String... additionalOptions) {
+		public WekaAttributeSelectionPipe addSearchOptions(String... additionalOptions) {
 			addToOptionList(searcherOptions, additionalOptions);
 			return this;
 		}
 		
-		public AttributeSelectionPipe addOptions(String... additionalOptions) {
+		public WekaAttributeSelectionPipe addOptions(String... additionalOptions) {
 			addToOptionList(evalOptions, additionalOptions);
 			return this;
 		}
@@ -182,10 +195,15 @@ public class MLPipelinePlan {
 		}
 
 		protected boolean isValid() {
-			if(searcherName == null || evalName == null) {
+			if(isWekaAS() && (searcherName == null || evalName == null)) {
 				return false;
 			}
 			return true;
 		}
+		
+		public boolean isWekaAS() {
+			return "weka.attributeSelection.AttributeSelection".equals(getName());
+		}
+
 	}
 }

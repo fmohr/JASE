@@ -129,16 +129,16 @@ public class DeployTests {
 
   }
 
-  // @Test
+   @Test
   public void test_nn_weka() throws IOException {
     List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .8f, .14f, 0.05f);
     ServiceCompositionResult result = this.executeComposition("testrsc/nn_weka.txt", split.get(0), split.get(1), split.get(2));
     System.out.println("Prediction accuracy MLP Weka: " + result.get("Accuracy").getData());
-    List<Double> predictions = (List<Double>) result.get("Predictions").getData();
+//    List<Double> predictions = (List<Double>) result.get("Predictions").getData();
     // System.out.println("Predictions by NN TF: " + predictions);
   }
 
-  // @Test
+   @Test
   public void test_nn_scikit() throws IOException {
     List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .1f, .7f, 0.2f);
     ServiceCompositionResult result = this.executeComposition("testrsc/nn_sk.txt", split.get(0), split.get(1), split.get(2));
@@ -156,7 +156,7 @@ public class DeployTests {
     return result;
   }
 
-  @Test
+//  @Test
   public void test_runtime_weka() throws Exception {
     System.out.println("DeployTests:test_runtime_weka() starts");
 
