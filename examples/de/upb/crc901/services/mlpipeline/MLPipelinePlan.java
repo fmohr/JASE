@@ -7,6 +7,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 
+import weka.classifiers.Classifier;
+import weka.core.OptionHandler;
+
 /**
  * 
  * A class that helps 'plan' a ML-pipeline.
@@ -53,6 +56,18 @@ public class MLPipelinePlan {
 	public MLPipe setClassifier(String classifierName) {
 		Objects.requireNonNull(this.nextHost, "Host needs to be specified before adding pipes to the pipeline.");
 		this.cPipe = new MLPipe(this.nextHost, classifierName); // set cPipe field.
+		return cPipe;
+	}
+	
+	public MLPipe setClassifier(Classifier wekaClassifier) {
+		Objects.requireNonNull(wekaClassifier);
+		String classname = wekaClassifier.getClass().getName();
+		String host = "localhost:8000";
+		this.cPipe = new MLPipe(host, classname);
+		if(wekaClassifier instanceof OptionHandler) {
+			String[] options = ((OptionHandler) wekaClassifier).getOptions();
+			cPipe.addOptions(options);
+		}
 		return cPipe;
 	}
 	
