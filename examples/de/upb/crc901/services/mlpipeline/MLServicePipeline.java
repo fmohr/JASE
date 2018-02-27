@@ -252,7 +252,7 @@ public class MLServicePipeline implements Classifier, Serializable {
 			
 //			plan.onHost(jaseHost).setClassifier("weka.classifiers.functions.MultilayerPerceptron");
 			plan.onHost(paseHost);
-			plan.setClassifier("tflib.NeuralNet").addOptions("-layer_count 2", "-epochs 1000", "-learning_rate 0.3");
+			plan.setClassifier("tflib.NeuralNet").addEvalOptions("-layer_count 2", "-epochs 1000", "-learning_rate 0.3");
 			
 
 //			System.out.println("Create MLServicePipeline with classifier and "

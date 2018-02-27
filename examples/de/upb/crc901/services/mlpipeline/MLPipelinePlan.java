@@ -7,6 +7,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 
+import weka.attributeSelection.ASEvaluation;
+import weka.attributeSelection.ASSearch;
 import weka.classifiers.Classifier;
 import weka.core.OptionHandler;
 
@@ -52,6 +54,26 @@ public class MLPipelinePlan {
 		return asPipe;
 	}
 	
+
+	public WekaAttributeSelectionPipe addWekaAttributeSelection(ASSearch searcher, ASEvaluation eval) {
+		Objects.requireNonNull(searcher);
+		Objects.requireNonNull(eval);
+		String hardcodedHost = "localhost:8000";
+		WekaAttributeSelectionPipe asPipe =  new WekaAttributeSelectionPipe(hardcodedHost);
+		asPipe.withSearcher(searcher.getClass().getName());
+		if(searcher instanceof OptionHandler) {
+			String searchOptions[] = ((OptionHandler) searcher).getOptions();
+			asPipe.addSearchOptions(searchOptions);
+		}
+		asPipe.withEval(eval.getClass().getName());
+		if(eval instanceof OptionHandler) {
+			String evalOptions[] = ((OptionHandler) eval).getOptions();
+			asPipe.addEvalOptions(evalOptions);
+		}
+		return asPipe;
+	}
+	
+	
 	public MLPipe setClassifier(String classifierName) {
 		Objects.requireNonNull(this.nextHost, "Host needs to be specified before adding pipes to the pipeline.");
 		this.cPipe = new MLPipe(this.nextHost, classifierName); // set cPipe field.
@@ -65,7 +87,7 @@ public class MLPipelinePlan {
 		this.cPipe = new MLPipe(host, classname);
 		if(wekaClassifier instanceof OptionHandler) {
 			String[] options = ((OptionHandler) wekaClassifier).getOptions();
-			cPipe.addOptions(options);
+			cPipe.addEvalOptions(options);
 		}
 		return cPipe;
 	}
@@ -123,7 +145,7 @@ public class MLPipelinePlan {
 		}
 		
 
-		public MLPipe addOptions(String...additionalOptions) {
+		public MLPipe addEvalOptions(String...additionalOptions) {
 			Objects.requireNonNull(additionalOptions);
 			for(String newOption : additionalOptions) {
 				classifierOptions.add(newOption);
@@ -177,7 +199,7 @@ public class MLPipelinePlan {
 			return this;
 		}
 		
-		public WekaAttributeSelectionPipe addOptions(String... additionalOptions) {
+		public WekaAttributeSelectionPipe addEvalOptions(String... additionalOptions) {
 			addToOptionList(evalOptions, additionalOptions);
 			return this;
 		}
