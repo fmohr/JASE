@@ -25,7 +25,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Collection;
 import java.util.HashMap;
@@ -36,11 +35,10 @@ import java.util.stream.Collectors;
 import org.apache.commons.lang3.math.NumberUtils;
 
 import de.upb.crc901.configurationsetting.compositiondomain.CompositionDomain;
-import de.upb.crc901.configurationsetting.logic.LiteralParam;
 import de.upb.crc901.configurationsetting.operation.OperationInvocation;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
 import de.upb.crc901.configurationsetting.serialization.SequentialCompositionSerializer;
-import weka.filters.unsupervised.attribute.AddUserFields;
+import jaicore.logic.fol.structure.LiteralParam;
 
 public class HttpServiceClient {
 

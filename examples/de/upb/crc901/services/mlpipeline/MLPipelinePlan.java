@@ -38,7 +38,6 @@ public class MLPipelinePlan {
 		return onHost(host + ":" + port);
 	}
 	
-
 	public MLPipe addAttributeSelection(String classname) {
 		Objects.requireNonNull(this.nextHost, "Host needs to be specified before adding pipes to the pipeline.");
 		MLPipe asPipe =  new MLPipe(this.nextHost, Objects.requireNonNull(classname));

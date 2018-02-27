@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
@@ -22,11 +23,11 @@ import weka.core.Capabilities;
 import weka.core.Instance;
 import weka.core.Instances;
 
-public class MLServicePipeline implements Classifier {
+public class MLServicePipeline implements Classifier, Serializable {
 
 	private final EnvironmentState servicesContainer = new EnvironmentState();
 	
-	private final OntologicalTypeMarshallingSystem otms = new OntologicalTypeMarshallingSystem();
+	private final transient OntologicalTypeMarshallingSystem otms = new OntologicalTypeMarshallingSystem();
 	
 	private final List<String> PPFieldNames = new LinkedList<>();
 	
@@ -101,7 +102,7 @@ public class MLServicePipeline implements Classifier {
 		 
 		try {
 			// send server request:
-			System.out.println("Sending the following construct composition:\n" + constructorEC.getCurrentCompositionText());
+//			System.out.println("Sending the following construct composition:\n" + constructorEC.getCurrentCompositionText());
 			
 			ServiceCompositionResult result = constructorEC.dispatch(); 
 			servicesContainer.extendBy(result); // add the services to out state
@@ -114,7 +115,7 @@ public class MLServicePipeline implements Classifier {
 		for (String fieldname : servicesContainer.serviceHandleFieldNames()) {
 			ServiceHandle sh = (ServiceHandle) servicesContainer
 					.retrieveField(fieldname).getData();
-			System.out.println("\t" + fieldname + ":=" + sh.getServiceAddress());
+//			System.out.println("\t" + fieldname + ":=" + sh.getServiceAddress());
 		}
 		// check if all our preprocessors and the classifier is created:
 		for(String ppFieldName : PPFieldNames) {
@@ -153,7 +154,7 @@ public class MLServicePipeline implements Classifier {
 		trainEC.withAddedMethodOperation("empty", classifierFieldName, "train", dataInFieldName);
 		
 		try {
-			System.out.println("Sending the following train composition:\n " + trainEC.getCurrentCompositionText());
+//			System.out.println("Sending the following train composition:\n " + trainEC.getCurrentCompositionText());
 			// send train request:
 			trainEC.dispatch();
 		} catch(IOException ex) {
@@ -193,7 +194,7 @@ public class MLServicePipeline implements Classifier {
 		
 		ServiceCompositionResult result;
 		try {
-			System.out.println("Sending the following predict composition:\n " + predictEC.getCurrentCompositionText());
+//			System.out.println("Sending the following predict composition:\n " + predictEC.getCurrentCompositionText());
 			// send predict request:
 			result = predictEC.dispatch();
 		} catch(IOException ex) {
@@ -235,38 +236,41 @@ public class MLServicePipeline implements Classifier {
 			// add attribute selections:
 			
 			String jaseHost = "localhost:" + jasePort;
-			String paseHost = "localhost:" + 5000;
+			String paseHost = "131.234.73.81:" + 5000;
+//			
+//			plan.onHost(paseHost).addAttributeSelection("sklearn.preprocessing.Imputer").addOptions("-strategy \"median\"", "-axis 0");
+//			
+//			plan.onHost(jaseHost);
+//			
+//			plan.addWekaAttributeSelection() .withSearcher("weka.attributeSelection.Ranker")
+//										.withEval("weka.attributeSelection.CorrelationAttributeEval");
+//
+//			plan.addWekaAttributeSelection() .withSearcher("weka.attributeSelection.Ranker")
+//										.withEval("weka.attributeSelection.ReliefFAttributeEval");
+//
+//			plan.onHost(paseHost).addAttributeSelection("sklearn.feature_selection.VarianceThreshold");
 			
-			plan.onHost(paseHost).addAttributeSelection("sklearn.preprocessing.Imputer").addOptions("-strategy \"median\"", "-axis 0");
+//			plan.onHost(jaseHost).setClassifier("weka.classifiers.functions.MultilayerPerceptron");
+			plan.onHost(paseHost);
+			plan.setClassifier("tflib.NeuralNet").addOptions("-layer_count 2", "-epochs 1000", "-learning_rate 0.3");
 			
-			plan.onHost(jaseHost);
-			
-			plan.addWekaAttributeSelection() .withSearcher("weka.attributeSelection.Ranker")
-										.withEval("weka.attributeSelection.CorrelationAttributeEval");
 
-			plan.addWekaAttributeSelection() .withSearcher("weka.attributeSelection.Ranker")
-										.withEval("weka.attributeSelection.ReliefFAttributeEval");
-
-			plan.onHost(paseHost).addAttributeSelection("sklearn.feature_selection.VarianceThreshold");
-			
-			plan.setClassifier("tflib.NeuralNet");
-			
-
-			System.out.println("Create MLServicePipeline with classifier and "
-					+ plan.getAttrSelections().size() + " many preprocessors.");
+//			System.out.println("Create MLServicePipeline with classifier and "
+//					+ plan.getAttrSelections().size() + " many preprocessors.");
 			
 			MLServicePipeline pl = new MLServicePipeline(plan);
 
 			Instances wekaInstances = new Instances(new BufferedReader(
 					new FileReader("../CrcTaskBasedConfigurator/testrsc"
-							+ File.separator + "polychotomous" + File.separator
+							+ File.separator + "autowekasets" + File.separator
 							+ "semeion.arff")));
 			wekaInstances.setClassIndex(wekaInstances.numAttributes() - 1);
+//			System.out.println(wekaInstances.numClasses());
 			List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances,
 					new Random(0), .7f);
 
 			pl.buildClassifier(split.get(0));
-			System.out.println("Building done!");
+//			System.out.println("Building done!");
 
 			int mistakes = 0;
 			int index = 0;
@@ -278,9 +282,9 @@ public class MLServicePipeline implements Classifier {
 				}
 				index++;
 			}
-			System.out.println("Pipeline done. This many mistakes were made:"
-					+ mistakes + ". Error rate: "
-					+ (mistakes * 1f / split.get(1).size()));
+//			System.out.println("Pipeline done. This many mistakes were made:"
+//					+ mistakes + ". Error rate: "
+//					+ (mistakes * 1f / split.get(1).size()));
 		} finally {
 			if(server != null) {
 				server.shutdown();

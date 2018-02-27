@@ -54,12 +54,12 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
 import de.upb.crc901.configurationsetting.compositiondomain.CompositionDomain;
-import de.upb.crc901.configurationsetting.logic.LiteralParam;
-import de.upb.crc901.configurationsetting.logic.VariableParam;
 import de.upb.crc901.configurationsetting.operation.Operation;
 import de.upb.crc901.configurationsetting.operation.OperationInvocation;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
 import jaicore.basic.FileUtil;
+import jaicore.logic.fol.structure.LiteralParam;
+import jaicore.logic.fol.structure.VariableParam;
 
 public class HttpServiceServer {
 

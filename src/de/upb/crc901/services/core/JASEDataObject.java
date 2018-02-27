@@ -1,6 +1,9 @@
 package de.upb.crc901.services.core;
 
-public class JASEDataObject {
+import java.io.Serializable;
+
+@SuppressWarnings("serial")
+public class JASEDataObject implements Serializable {
 	private final String type;
 	private final Object object;
 

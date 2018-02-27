@@ -1,5 +1,6 @@
 package de.upb.crc901.services.core;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -12,7 +13,8 @@ import java.util.Set;
  * @author aminfaez
  *
  */
-public final class EnvironmentState {
+@SuppressWarnings("serial")
+public final class EnvironmentState implements Serializable {
 	/**
 	 * Contains field name that were part of the env state from the very beginning. 
 	 * In a composition call startingFields is filled with the names of the inputs.

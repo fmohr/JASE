@@ -1,8 +1,9 @@
 package de.upb.crc901.services.core;
 
+import java.io.Serializable;
 import java.util.Objects;
 
-public final class ServiceHandle {
+public final class ServiceHandle implements Serializable {
   /* default values */
   private static final String OWN_HOST = "local";
 
@@ -18,7 +19,7 @@ public final class ServiceHandle {
   private final String host;
   private final String classpath;
   private final String id;
-  private final Object service;
+  private final transient Object service;
 
 
   /**
@@ -34,7 +35,7 @@ public final class ServiceHandle {
     this.host = Objects.requireNonNull(host);
     this.classpath = Objects.requireNonNull(classpath);
     this.id = Objects.requireNonNull(id);
-    this.service = Objects.requireNonNull(service);
+    this.service = service;
   }
 
   /**

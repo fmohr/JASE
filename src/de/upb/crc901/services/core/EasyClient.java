@@ -268,6 +268,7 @@ public final class EasyClient {
 	
 	public EasyClient withPositionalArgument(final Object data) {
 		Objects.requireNonNull(data);
+		assureOMTS();
 		JASEDataObject parsedArgument = this.otms.allToSemantic(data, false);
 		this.body.addPositionalArgument(parsedArgument);
 		return this;
@@ -329,4 +330,8 @@ public final class EasyClient {
 		return comp;
 	}
 
+	private void assureOMTS() {
+		if (this.otms == null)
+			otms = new OntologicalTypeMarshallingSystem();
+	}
 }
