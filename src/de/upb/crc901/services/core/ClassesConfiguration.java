@@ -1,17 +1,26 @@
 package de.upb.crc901.services.core;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
 import java.util.function.Function;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.impl.Log4jLoggerFactory;
+
+import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import jaicore.basic.FileUtil;
@@ -28,24 +37,65 @@ public class ClassesConfiguration extends HashMap<String, JsonNode> {
 	 * 
 	 */
 	private static final long serialVersionUID = 1L;
+	
+	
+	private Map<String, JsonNode> rawConfiguration = new HashMap<>();
+	
+	private static final Logger log = LoggerFactory.getLogger(HttpServiceServer.class);
 
 	/**
-	 * Reads the cofiguration file from configPath into this map.
-	 * @param configPath Filepath to configuration
-	 * @throws IOException If the file can't be read or there is problems with parsing the content.
+	 * Reads the cofiguration files from configPaths and appends them into itself..
 	 */
-	public ClassesConfiguration(String configPath) throws IOException {
-		super();
-		String jsonString = FileUtil.readFileAsString(configPath);
-		TypeReference<HashMap<String,JsonNode>> typeRef = new TypeReference<HashMap<String,JsonNode>>() {};
-
-        ObjectMapper mapper = new ObjectMapper(); 
-        HashMap<String,JsonNode> o = mapper.readValue(jsonString, typeRef);
-        // put classes into this hashmap
-        this.putAll(o);
-        // resolve inheritance
-        this.resolveInheritances();
+	public ClassesConfiguration(String... configPaths) throws IOException {
+		this();
+		appendConfigFromFiles(configPaths);
 	}
+	
+	public ClassesConfiguration() {
+		super();
+	}
+
+	/**
+	 * Appends class configurations from files to the existing ones.
+	 */
+	public void appendConfigFromFiles(String... configFiles) throws IOException  {
+		if(configFiles.length == 0) {
+			return;
+		}
+		List<String> jsonStringList = new ArrayList<>(configFiles.length);
+		for(String filePath : configFiles) {
+			try {
+				String jsonString = FileUtil.readFileAsString(filePath);
+				jsonStringList.add(jsonString);
+			} catch( IOException e) {
+				log.error("Exception when reading file {}: {}", filePath, e.getMessage());;
+			}
+		}
+		String[]  jsonStringArr = jsonStringList.toArray(new String[jsonStringList.size()]);
+		this.appendConfigFromJsonStrings(jsonStringArr);
+	}
+	
+	/**
+	 * Appends class configurations from json-strings to the existing ones.
+	 */
+	public void appendConfigFromJsonStrings(String... jsonStrings) throws IOException {
+		if(jsonStrings.length == 0) {
+			return;
+		}
+		TypeReference<HashMap<String,JsonNode>> typeRef = new TypeReference<HashMap<String,JsonNode>>() {};
+        ObjectMapper mapper = new ObjectMapper(); 
+        for(String jsonString : jsonStrings) {
+        		// iterate over configs and append them to the existing configuration
+            HashMap<String,JsonNode> loadedConfig = mapper.readValue(jsonString, typeRef);
+            rawConfiguration.putAll(loadedConfig);
+        }
+        // reset this configuration, in order to call resolveInheritances on a un extended configurations
+		this.clear(); // clear all configurations.
+        this.putAll(rawConfiguration);
+        this.resolveInheritances();
+		
+	}
+	
 	/**
 	 * Resolves the 'extends' attribute from classes.
 	 * A class can define an 'extends' array filled with other classes from the configuration.
@@ -115,8 +165,25 @@ public class ClassesConfiguration extends HashMap<String, JsonNode> {
 						// don't want to change inheritance or else funny things happen when calling resolveInheritances twice. 
 						continue;
 					}
-					JsonNode attributeContent = superConfig.get(attributeName);
-					((ObjectNode)classconfig).set(attributeName, attributeContent);
+					JsonNode superAttribute = superConfig.get(attributeName);
+					boolean extended = false; // flag that indicates that attribute has been extended.
+					if(classconfig.has(attributeName)) {
+						// first try to add the value to the array or dictionary
+						JsonNode baseAttribute = classconfig.get(attributeName);
+						if(baseAttribute.isArray() && superAttribute.isArray()) {
+							((ArrayNode) baseAttribute).addAll((ArrayNode) superAttribute);
+						} 
+						else if(baseAttribute.isObject() && baseAttribute.isObject()) {
+							((ObjectNode)baseAttribute).setAll((ObjectNode) superAttribute);
+						}
+						else {
+							System.err.println("CONFIG: Attribute " + attributeName + " is being replaced by an incompatible type from: " + superClasspath);
+						}
+					}
+					if(!extended) {
+						// couldnt add attribute, so just replace it
+						((ObjectNode)classconfig).set(attributeName, superAttribute);
+					}
 				}
 			}
 		}
@@ -182,6 +249,10 @@ public class ClassesConfiguration extends HashMap<String, JsonNode> {
 		if(!classknown(classpath)) {
 			return false;
 		}
+		if("__construct".equals(methodName)) {
+			// constructor is known.
+			return true;
+		}
 		if(isWrapped(classpath)) {
 			// first look at the wrapper
 			String wrapperPath = getWrapperClasspath(classpath);
@@ -235,11 +306,24 @@ public class ClassesConfiguration extends HashMap<String, JsonNode> {
 		if(!methodKnown(classpath, methodName)) {
 			throw new RuntimeException("The classpath: " + classpath + " and method: " + methodName + " are not known.");
 		}
+		if("__construct".equals(methodName)) {
+			return getStandardResultMap();
+		}
+		if(isWrapped(classpath)) {
+			// if the class is wrapped first look if the wrapper config is defining the result map of this method.
+			String wrapperClasspath = getWrapperClasspath(classpath);
+			if(methodKnown(wrapperClasspath, methodName)) {
+				return getMethodResultMap(wrapperClasspath, methodName);
+			}
+		}
 		JsonNode classConfig = getClassConfiguration(classpath);
 		if (classConfig.has("methods")) {
 			JsonNode methods = classConfig.get("methods");
 			if(!methods.isArray()) { // if its not an array it's method may define mapping
 				JsonNode method = classConfig.get("methods").get(methodName);
+				if(method == null) {
+					return null;
+				}
 				if(!method.isTextual() && method.has("resultmap")){
 					// result map was defined
 					TypeReference<HashMap<String,String>> typeRef = new TypeReference<HashMap<String,String>>() {};

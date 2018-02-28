@@ -1,7 +1,7 @@
 /**
  * ExampleTester.java
  * Copyright (C) 2017 Paderborn University, Germany
- *
+ * 
  * @author: Felix Mohr (mail@felixmohr.de)
  */
 
@@ -21,132 +21,148 @@
  */
 package de.upb.crc901.services;
 
-import Catalano.Imaging.FastBitmap;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+
+import javax.swing.JOptionPane;
+
+import org.apache.commons.lang3.math.NumberUtils;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import Catalano.Imaging.FastBitmap;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
 import de.upb.crc901.configurationsetting.serialization.SequentialCompositionSerializer;
 import de.upb.crc901.services.core.HttpServiceClient;
 import de.upb.crc901.services.core.HttpServiceServer;
 import de.upb.crc901.services.core.OntologicalTypeMarshallingSystem;
 import de.upb.crc901.services.core.ServiceCompositionResult;
-
+import de.upb.crc901.services.core.ServiceHandle;
 import jaicore.basic.FileUtil;
 import jaicore.basic.MathExt;
 import jaicore.ml.WekaUtil;
+import jaicore.ml.core.SimpleInstanceImpl;
+import jaicore.ml.core.SimpleInstancesImpl;
+import jaicore.ml.core.SimpleLabeledInstancesImpl;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-
-import javax.swing.JOptionPane;
-
-import org.junit.After;
 import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-
+import weka.classifiers.Classifier;
 import weka.classifiers.trees.RandomTree;
 import weka.core.Instance;
 import weka.core.Instances;
 
 public class ExampleTester {
 
-  private final static int PORT = 8000;
+	private final static int PORT = 5000;
 
-  private HttpServiceServer server;
-  private SequentialComposition composition;
-  private SequentialCompositionSerializer sqs;
-  private HttpServiceClient client;
-  private final OntologicalTypeMarshallingSystem otms = new OntologicalTypeMarshallingSystem();
+	private HttpServiceServer server;
+	private SequentialComposition composition;
+	private SequentialCompositionSerializer sqs;
+	private HttpServiceClient client;
+	private final OntologicalTypeMarshallingSystem otms = new OntologicalTypeMarshallingSystem();
 
-  @Before
-  public void init() throws Exception {
-    /* start server */
-    this.server = HttpServiceServer.TEST_SERVER();
+	@Before
+	public void init() throws Exception {
 
-    /* read in composition */
-    this.sqs = new SequentialCompositionSerializer();
-    this.composition = this.sqs.readComposition(FileUtil.readFileAsList("testrsc/composition.txt"));
+		/* start server */
+		server = HttpServiceServer.TEST_SERVER();
 
-    this.client = new HttpServiceClient(this.otms);
-  }
+		/* read in composition */
+		sqs = new SequentialCompositionSerializer();
+		composition = sqs.readComposition(FileUtil.readFileAsList("testrsc/composition.txt"));
 
-  @Test
-  public void testClassifier() throws Exception {
-    /* read instances */
-    Instances wekaInstances = new Instances(
-        new BufferedReader(new FileReader("../CrcTaskBasedConfigurator/testrsc" + File.separator + "polychotomous" + File.separator + "audiology.arff")));
-    wekaInstances.setClassIndex(wekaInstances.numAttributes() - 1);
-    List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .9f);
+		client = new HttpServiceClient(otms);
+	}
 
-    /* create and train classifier service */
-    String className = RandomTree.class.getName();
-    String serviceId = this.client.callServiceOperation("127.0.0.1:" + PORT + "/" + className + "::__construct").get("out").asText();
-    this.client.callServiceOperation(serviceId + "::train", split.get(0));
+	@Test
+	public void testClassifier() throws Exception {
 
-    /* eval instances on service */
-    int mistakes = 0;
-    for (Instance i : split.get(1)) {
-      ServiceCompositionResult resource = this.client.callServiceOperation(serviceId + "::classifyInstance", i);
-      double prediction = Double.parseDouble(resource.get("out").toString());
-      if (prediction != i.classValue()) {
-        mistakes++;
-      }
-    }
+		/* read instances */
+		Instances wekaInstances = new Instances(
+				new BufferedReader(new FileReader("../CrcTaskBasedConfigurator/testrsc" + File.separator + "polychotomous" + File.separator + "audiology.arff")));
+		wekaInstances.setClassIndex(wekaInstances.numAttributes() - 1);
+		List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .9f);
 
-    ServiceCompositionResult result = this.client.callServiceOperation(serviceId + "::predict", split.get(1));
-    List<String> predictions = new ObjectMapper().readValue(result.get("out").get("data").traverse(), new TypeReference<ArrayList<String>>() {
-    });
+		/* create and train classifier service */
+		String className = RandomTree.class.getName();
+		
+		ServiceHandle service = ((ServiceHandle) client.callServiceOperation("localhost:" + PORT + "/" + className + "::__construct").get("out").getData());
+		String serviceAddress = service.getServiceAddress();
+		client.callServiceOperation(serviceAddress + "::train", split.get(0));
 
-    for (String predictedLabel : predictions) {
-      int index = wekaInstances.classAttribute().indexOfValue(predictedLabel);
-      Assert.assertNotEquals(-1, index);
-    }
+		/* eval instances on service */
+		int mistakes = 0;
+		for (Instance i : split.get(1)) {
+			ServiceCompositionResult resource = client.callServiceOperation(serviceAddress + "::classifyInstance", i);
+			
+			float prediction = (float) (resource.get("out").getData());
+			if (prediction != i.classValue())
+				mistakes++;
+		}
+		
+		ServiceCompositionResult result =  client.callServiceOperation(serviceAddress + "::predict", split.get(1));
+		List<String> predictions = (List<String>) result.get("out").getData();
+		
+		for(String predictedLabel : predictions) {
+			int index = wekaInstances.classAttribute().indexOfValue(predictedLabel);
+			Assert.assertNotEquals(-1, index);
+		}
+		
 
-    result = this.client.callServiceOperation(serviceId + "::predict_and_score", split.get(1));
-    Double score = new ObjectMapper().readValue(result.get("out").traverse(), Double.class);
+		result =  client.callServiceOperation(serviceAddress + "::predict_and_score", split.get(1));
+		Double score = (Double) result.get("out").getData();
+		
+		
+		/* report score */
+		System.out.println(mistakes + "/" + split.get(1).size());
+		double clientside_score = MathExt.round(1 - mistakes * 1f / split.get(1).size(), 2);
+		score = MathExt.round(score, 2);
+		
+		System.out.println("Accuracy calculated by client: " + clientside_score);
+		System.out.println("Accuracy by predict_and_score method: " + score);
+		
+		Assert.assertEquals(clientside_score, score, 0.01);
+		
+	}
 
-    /* report score */
-    System.out.println(mistakes + "/" + split.get(1).size());
-    double clientside_score = MathExt.round(1 - mistakes * 1f / split.get(1).size(), 2);
-    score = MathExt.round(score, 2);
+	@Test
+	public void testImageProcessor() throws Exception {
 
-    System.out.println("Accuracy calculated by client: " + clientside_score);
-    System.out.println("Accuracy by predict_and_score method: " + score);
-
-    Assert.assertEquals(clientside_score, score, 0.01);
-
-  }
-
-  @Test
-  public void testImageProcessor() throws Exception {
-
-    /* create new classifier */
-    System.out.println("Now running the following composition: ");
-    System.out.println(this.sqs.serializeComposition(this.composition));
-    File imageFile = new File("testrsc/FelixMohr.jpg");
-    FastBitmap fb = new FastBitmap(imageFile.getAbsolutePath());
-    JOptionPane.showMessageDialog(null, fb.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
-    ServiceCompositionResult resource = this.client.invokeServiceComposition(this.composition, fb);
-    FastBitmap result = this.otms.jsonToObject(resource.get("fb3"), FastBitmap.class);
-    JOptionPane.showMessageDialog(null, result.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
-  }
-
-  @Test
-  public void testSequentialCompositionSerializer() throws Exception {
-    SequentialCompositionSerializer scs = new SequentialCompositionSerializer();
-    SequentialComposition sc = scs.readComposition("a = foo::bar({})");
-  }
-
-  @After
-  public void shutdown() {
-    System.out.println("Shutting down ...");
-    this.server.shutdown();
-  }
+		/* create new classifier */
+		System.out.println("Now running the following composition: ");
+		System.out.println(sqs.serializeComposition(composition));
+		File imageFile = new File("testrsc/FelixMohr.jpg");
+		FastBitmap fb = new FastBitmap(imageFile.getAbsolutePath());
+		JOptionPane.showMessageDialog(null, fb.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
+		ServiceCompositionResult resource = client.invokeServiceComposition(composition, fb);
+		FastBitmap result = otms.objectFromSemantic(resource.get("fb3"), FastBitmap.class);
+		JOptionPane.showMessageDialog(null, result.toIcon(), "Result", JOptionPane.PLAIN_MESSAGE);
+	}
+	
+//	@Test
+	public void testSequentialCompositionSerializer() throws Exception{
+		SequentialCompositionSerializer scs = new SequentialCompositionSerializer();
+		SequentialComposition sc = scs.readComposition("a = foo::bar({})");
+	}
+	
+	@After
+	public void shutdown() {
+		System.out.println("Shutting down ...");
+		server.shutdown();
+	}
 }

@@ -1,348 +1,427 @@
 package de.upb.crc901.services.core;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.UnsupportedEncodingException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.Objects;
 
-import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.reflect.MethodUtils;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.net.httpserver.HttpExchange;
+import com.fasterxml.jackson.core.JsonEncoding;
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 
 import de.upb.crc901.configurationsetting.operation.OperationInvocation;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
 import de.upb.crc901.configurationsetting.serialization.SequentialCompositionSerializer;
 
-import static de.upb.crc901.services.core.HttpServiceServer.logger;
-
 /**
- * A data structure class, which encodes or decodes Post body data. 
- * This is used by HttpServiceClient, whose data is encoded to the post's body content, 
- * and it is also used by HttpServiceServer, who initializes an instance by the encoded post body it receives.
- * (Note: This class was created to take care of logic that was implemented in the client and server class before.)
+ * A data structure class, which encodes or decodes Post body data. This is used
+ * by HttpServiceClient, whose data is encoded to the post's body content, and
+ * it is also used by HttpServiceServer, who initializes an instance by the
+ * encoded post body it receives. (Note: This class was created to take care of
+ * logic that was implemented in the client and server class before.)
  * 
  * @author aminfaez
  *
  */
-@SuppressWarnings("restriction")
 public final class HttpBody {
-	
-	
-	
-	/**
-	 * Constant strings used in communication.
-	 */
-	public final static String 	coreography = "coreography",
-								currentindex = "currentindex",
-								maxindex = "maxindex",
-								inputs = "inputs";
-	
-	/**
-	 * Encoding used in http's body.
-	 */
-	public final static String 	encoding = "utf-8";
-	
-	public final Map<String, Object> inputsField;
-	private final String coreographyField;
-	private final int currentIndexField;
-	private final int maxIndexField;
-	
-	HttpBody(Map<String, Object> inputs, String corepgraphy, int currentIndex, int maxindex) {
-		this.inputsField = inputs;
-		this.coreographyField = corepgraphy;
-		this.currentIndexField = currentIndex;
-		this.maxIndexField = maxindex;
-	}
-	
-	/**
-	 * Looks in the params map for a coreography entry.
-	 * @return true, if there is a coreography entry.
-	 */
-	public boolean containsCoreography() {
-		return coreographyField != null;
-	}
-	/**
-	 * Returns the coreography value from the params map. Throws RuntimeException if there is no entry.
-	 * @return coreography string.
-	 */
-	public String getCoreographyString() {
-		if(containsCoreography()) {
-			return coreographyField;
-		}
-		else {
-			throw new RuntimeException("No choreography was given.");
-		}
-	}
-	
-	
-	/**
-	 * If there was no choreography string in the request body this method throws an excpetion.
-	 * @return the parsed choreography string in a SequentialComposition. 
-	 */
-	public SequentialComposition getComposition() {
-		if(containsCoreography()) {
-			SequentialCompositionSerializer scs = new SequentialCompositionSerializer();
-			// TODO workaround because bug in scs. remove the replacement after the bug is fixed:
-			String composition = getCoreographyString();
-			composition = composition.replaceAll("\\(\\{\\}\\)", "({,})"); // add comma to empty inputs
-			// end of workaround
-			return scs.readComposition(composition);
-		}
-		else {
-			throw new RuntimeException("No choreography was given.");
-		}
-	}
-	
-	/**
-	 * Returns the operation in position index from parsedCompositionField.
-	 * @param index position of operation in composition.
-	 * @return the addressed operation
-	 */
-	public OperationInvocation getOperation(int index) {
-		for(OperationInvocation opInv : getComposition()) {
-			if(index != 0) {
-				// decrease index until it hits 0.
-				index--;
-			}
-			else {
-				// index hit 0, so this one is requested.
-				return opInv;
-			}
-		}
-		throw new ArrayIndexOutOfBoundsException("index " + index + " was asked from " + getCoreographyString());
-	}
-	
-	/**
-	 * Current Index. 
-	 * @return the current index value from the map if it is present and is Integer-parsable. Else 0 is returned.
-	 */
-	public int getCurrentIndex() {
-		return currentIndexField;
-	}
-	
-	/**
-	 * Returns true if the index is below currentindexField.
-	 */
-	public boolean isBelowExecutionBound(int index) {
-		return index < currentIndexField;
-	}
-	
-	/**
-	 * Returns true if index is above or equal to maxindexField. 
-	 * If maxindexField is set to -1, it will be treated as infinity.
-	 */
-	public boolean isAboveExecutionBound(int index) {
-		if(maxIndexField == -1) {
-			return false; // always in bound if maxIndex is infinity.
-		}
-		else {
-			return index >= maxIndexField;
-		}
-	}
-	
-	/**
-	 * Returns the inputs.
-	 * @return Inputs
-	 */
-	public Map<String, Object> getInputs() {
-		return inputsField;
-	}
-	
 
-	/**
-	 * Encodes this instance and returns the string to be sent in a http body. 
-	 * @param otms The marshaling system used to parse the input objects in inputsField to JsonNodes.
-	 * @return string encoding of this instance.
-	 */
-	public String encode(OntologicalTypeMarshallingSystem otms) {
-		StringBuilder encoding = new StringBuilder();
-		
-		// append inputs to encoding
-		for (String input : inputsField.keySet()) {
-			Object inputObject = inputsField.get(input);
-			String serialization;
-			if (inputObject instanceof Number || inputObject instanceof String)
-				serialization = inputObject.toString();
-			else
-				serialization = ((inputObject instanceof JsonNode) ? (JsonNode) inputObject : otms.objectToJson(inputObject)).toString();
-			encoding.append("inputs[" + input + "]=");
-			encoding.append(serialization);
-			encoding.append("&");
-		}
-		
-		// append coreography if not null
-		if(this.coreographyField != null) { 
-			encoding.append(HttpBody.coreography + "=");
-			encoding.append(this.coreographyField);
-			// append current index
-			encoding.append("&" + HttpBody.currentindex + "=");
-			encoding.append(this.currentIndexField);
-			// append max index if it isn't -1:
-			if(maxIndexField != -1) {
-				encoding.append("&" + HttpBody.maxindex + "=");
-				encoding.append(this.maxIndexField);
-			}
-		}
-		return encoding.toString();
-	}
-	
-	/**
-	 * Decodes Body and creates HttpBody.
-	 * @param exchange The http exchange object
-	 * @param otms The Marshalling System. It's only use is to look up if a type is known (see jsonDeserialiseInputs method)
-	 * @return HttpBody Struct
-	 * @throws IOException thrown if there are problems regarding json parsing or reading from the input stream.
-	 */
-	public static HttpBody decode(HttpExchange exchange, OntologicalTypeMarshallingSystem otms) throws IOException{
-		// Parse Http body
-		String decodedBody = readBody(exchange);
-		Map<String, Object> params = parseBodyIntoMap(decodedBody);
-		Map<String, Object> inputs = jsonDeserialiseInputs(params, otms);
-		
-		String coreo; 
-		// assign coreography string, based on if it is available.
-		if(params.containsKey(HttpBody.coreography)) {
-			coreo = params.get(HttpBody.coreography).toString();
-		}
-		else {
-			coreo = null;
-		}
-		// get current index
-		int index = 0;
-		int maxindex = -1;
-		if(params.containsKey(HttpBody.currentindex)) {
-			String indexString = params.get(HttpBody.currentindex).toString();
-			try {
-				index = Integer.parseInt(indexString);
-			} catch(NumberFormatException nfe) {
-				logger.error(nfe.getMessage());
-			}
-		}
-		if(params.containsKey(HttpBody.maxindex)) {
-			String indexString = params.get(HttpBody.maxindex).toString();
-			try {
-				maxindex = Integer.parseInt(indexString);
-			} catch(NumberFormatException nfe) {
-				logger.error(nfe.getMessage());
-			}
-		}
-		return new HttpBody(inputs, coreo, index, maxindex);
-	}
-	/**
-	 * Reads Post's Body from HttpExchange's input stream. 
-	 * @param exchange received post request.
-	 * @return string content of the body.
-	 * @throws IOException thrown by opening and reading the exchange's InputStream returned by getRequestBody(). 
-	 */
-	private static String readBody(HttpExchange exchange) throws IOException{
-		if ((!"post".equalsIgnoreCase(exchange.getRequestMethod()))) {
-			throw new UnsupportedEncodingException("No post request");
-		}
-		BufferedReader br = new BufferedReader(new InputStreamReader(exchange.getRequestBody(), HttpBody.encoding));
-		String query = br.readLine();
-		br.close();
-		return query;
-	}
-	/**
-	 * Parses the body and puts the parameters into the map.
-	 * 
-	 * @param decodedBody decoded string from the http body.
-	 * @param consumer in this case the Map::put function.
-	 */
-	private static Map<String, Object> parseBodyIntoMap(String decodedBody ) {
-		HashMap<String, Object> parameters = new HashMap<>(); // This map will be populated and returned.
-		if(decodedBody == null) {
-			// Return empty
-			return parameters;
-		}
-		// Split by params
-		// e.g.: decodedBody = "a=1&b=helloworld"
-		String pairs[] = decodedBody.split("[&]");
-		for (String pair : pairs) {
-			String param[] = pair.split("[=]", 2); // split only returns on array of size two: "A=B=C" -> ["A", "B=C"]
-			String key = null;
-			String value = null;
-			if(param.length == 0) {
-				// Empty paramter. e.g. : decodedBody = "...&&..."
-				// continue with the next pair of parameter.
-				// TODO before if there was an empty pair, it would put null, null into the map. 
-				continue; 
-			}
-			if (param.length > 0) {
-				key = param[0];
-			}
-			if (param.length > 1) {
-				value = param[1];
-			}
-			// e.g. : pair = "a=1" -> key = "a", value = "1"
-			
-			// Now if the body maps multiple entries to a parameter key, 
-			// then sum them all up in a list and map to the summed list:
-			if (parameters.containsKey(key)) {
-				Object obj = parameters.get(key);
-				if (obj instanceof String) {
-					// This is the first time a duplicate key is found -> create a list of their values.
-					List<String> values = new ArrayList<String>();
-					values.add((String) obj);
-					values.add(value);
-					parameters.put(key, values);
-				} else if (obj instanceof List<?>) {
-					// A list was already added the last time a duplicate key was found -> add the value to the list.
-					@SuppressWarnings("unchecked")
-					List<String> values = (List<String>) obj;
-					values.add(value);
-				}
-			} else {
-				// This is the first time a key was found. Add it to the list.
-				parameters.put(key, value);
-			}
-		}
-		return parameters;
-	}
-	/**
-	 * Deserialises every key of the given map to a Json Object and maps all inputs using their given index.
-	 * @param params Map of body parameters. This map, maps only to String or List<String>.
-	 * @return mapping from index of input to json-object-representation of the input.
-	 * @throws IOException Thrown by the json parser.
-	 */
-	private static Map<String, Object> jsonDeserialiseInputs(Map<String, Object> params, 
-			OntologicalTypeMarshallingSystem otms) throws IOException {
-		Map<String, Object> inputs = new HashMap<>();
-		for (String inputName : params.keySet()) {
-			if (!inputName.startsWith(HttpBody.inputs)) {
-				// Continue to the next parameterKey if the parameter is not an input.
-				continue;
-			}
-			// Indexes are noted in brackets.
-			// Extract index from brackets. e.g.: inputName =  "inputs[i1]" -> index = "i1"
-			String index = StringUtils.substringBetween(inputName, "[", "]"); 
-			String inputStringValue = params.get(inputName).toString();
-			JsonNode inputObject = new ObjectMapper().readTree(inputStringValue);
-			// Input needs to have type field.
-			if(inputObject.isNumber()) {
-				inputs.put(index, inputObject);
-			}
-			else if (!inputObject.has("type")) { // ignore this one
-				//throw new IllegalArgumentException("Input " + index + " has no type attribute!");
-				HttpServiceServer.logger.error("Input with index = " + index + " has no type attribute!");
-				if(HttpServiceServer.logger.isDebugEnabled()) {
-					HttpServiceServer.logger.debug("Input " + index + " is " + inputStringValue);
-				}
-			}
-			else {
-				// And the given type has to be recognized.
-				inputs.put(index, inputObject);
-			}
-		}
-		return inputs;
-	}
+  /**
+   * Constant strings used in communication.
+   */
+  public final static String CHOREOGRAPGY_FIELDNAME = "choreography", CURRENTINDEX_FIELDNAME = "currentindex",
+      MAXINDEX_FIELDNAME = "maxindex", INPUTS_FIELDNAME = "inputs";
 
-	
-	
+  private static final String ARGLIST_FIELDNAME = "$arglist$";
+
+  private String composition = null;
+  private int currentIndex = 0;
+  private int maxIndex = -1;
+  private EnvironmentState envState = new EnvironmentState();
+
+  private OntologicalTypeMarshallingSystem otms = new OntologicalTypeMarshallingSystem();
+
+  public HttpBody() {
+
+  }
+
+  public HttpBody(EnvironmentState envState, String chorepgraphy, int currentIndex, int maxindex) {
+    this.envState = envState;
+    this.composition = chorepgraphy;
+    this.currentIndex = currentIndex;
+    this.maxIndex = maxindex;
+  }
+  
+
+  public boolean containsComposition() {
+    return this.composition != null;
+  }
+
+  /**
+   * @return the composition
+   */
+  public final String getComposition() {
+	 if(containsComposition()) {
+		 return composition;
+	 } else {
+		 return "";
+	 }
+  }
+
+  /**
+   * @param composition
+   *          the composition to set
+   */
+  public final void setComposition(String composition) {
+    this.composition = composition;
+  }
+
+  /**
+   * Adds the given line to the composition text.
+   */
+  public void addOpToComposition(String compositionLine) {
+    {// error checks
+      Objects.requireNonNull(compositionLine);
+      if(!compositionLine.endsWith(";")) {
+        throw new RuntimeException();
+      }
+      if(new SequentialCompositionSerializer().readComposition(compositionLine) == null) {
+        throw new RuntimeException(); // check if the given composition is parsable
+      }
+    }
+  	setComposition(getComposition()+compositionLine);
+  }
+
+  /**
+   * @return the currentIndex
+   */
+  public final int getCurrentIndex() {
+    return currentIndex;
+  }
+
+  /**
+   * @param currentIndex
+   *          the current index to set
+   */
+  public final void setCurrentIndex(int currentIndex) {
+    this.currentIndex = currentIndex;
+  }
+
+  /**
+   * @return the maxIndex
+   */
+  public final int getMaxIndex() {
+    return maxIndex;
+  }
+
+  /**
+   * @param maxIndex
+   *          the max index to set
+   */
+  public final void setMaxIndex(int maxIndex) {
+    this.maxIndex = maxIndex;
+  }
+
+  public void addKeyworkArgument(String name, JASEDataObject data) {
+    envState.addField(name, data);
+  }
+
+  public void addPositionalArgument(JASEDataObject data) {
+    envState.appendField(data);
+  }
+
+  public void addUnparsedKeywordArgument(String name, Object o) {
+    addKeyworkArgument(name, otms.allToSemantic(o, false));
+  }
+
+  public void addUnparsedPositionalArgument(Object o) {
+
+    addPositionalArgument(otms.allToSemantic(o, false));
+  }
+
+  /**
+   * Parses the contained composition to SequentialComposition.
+   * 
+   * @return a SequentialComposition object.
+   */
+  public SequentialCompositionCollection parseSequentialComposition() {
+    SequentialCompositionSerializer scs = new SequentialCompositionSerializer();
+    // TODO workaround because bug in scs. remove the replacement after the bug is
+    // fixed:
+    String composition = getComposition();
+    composition = composition.replaceAll("\\(\\{\\}\\)", "({,})"); // add comma to empty inputs
+    // end of workaround
+    SequentialComposition sc = scs.readComposition(composition);
+    SequentialCompositionCollection scc = new SequentialCompositionCollection(sc);
+    return scc;
+  }
+
+  /**
+   * Returns the operation in position index from parsedCompositionField.
+   * 
+   * @param index
+   *          position of operation in composition.
+   * @return the operation
+   */
+  public OperationInvocation getOperation(int index) {
+    return parseSequentialComposition().get(index);
+  }
+
+  /**
+   * Returns true if the index is below currentindexField.
+   */
+  public boolean isBelowExecutionBound(int index) {
+    return index < getCurrentIndex();
+  }
+
+  /**
+   * Returns true if the given index is above or equal to maxindexField. If
+   * maxindexField is set to -1, it will be treated as infinity.
+   */
+  public boolean isAboveExecutionBound(int index) {
+    if (getMaxIndex() == -1) {
+      return false; // always in bound if maxIndex is -1 (infinity).
+    } else {
+      return index >= getMaxIndex();
+    }
+  }
+
+  /**
+   * Returns the environment map
+   */
+  public EnvironmentState getState() {
+    return envState;
+  }
+
+  /**
+   * Writes this instance as a json body to the stream using the jackson library.
+   * 
+   * @param outStream
+   *          the output stream
+   * @param otms
+   *          The marshaling system used to parse the arguments objects to
+   *          semantic objects
+   * @throws IOException
+   */
+  private void writeBodyAsJson(OutputStream outStream) throws IOException {
+    JsonFactory jfactory = new JsonFactory();
+    JsonGenerator jsonOut = jfactory.createGenerator(outStream, JsonEncoding.UTF8);
+    jsonOut.writeStartObject(); // {
+    // Write composition:
+    if (containsComposition()) {
+      jsonOut.writeStringField(HttpBody.CHOREOGRAPGY_FIELDNAME, this.getComposition());
+    }
+    // Write current and max index:
+    jsonOut.writeNumberField(HttpBody.CURRENTINDEX_FIELDNAME, this.getCurrentIndex());
+    jsonOut.writeNumberField(HttpBody.MAXINDEX_FIELDNAME, this.getMaxIndex());
+    // Write Arguments:
+    jsonOut.writeFieldName(HttpBody.INPUTS_FIELDNAME);
+    jsonOut.writeStartObject();
+
+    // positional arguments
+    jsonOut.writeFieldName(HttpBody.ARGLIST_FIELDNAME);
+    jsonOut.writeStartArray();
+    for (String fieldName : getState().positionalFieldNames()) {
+      writeObject(jsonOut, getState().retrieveField(fieldName));
+    }
+    jsonOut.writeEndArray();
+
+    // keyword arguments
+    for (String keyword : getState().keywordFieldNames()) {
+      JASEDataObject data = getState().retrieveField(keyword);
+      jsonOut.writeFieldName(keyword);
+      writeObject(jsonOut, data);
+    }
+
+    // end of arguments
+    jsonOut.writeEndObject();
+    // end of body
+    jsonOut.writeEndObject(); // }
+    jsonOut.flush();
+  }
+
+  private void writeObject(JsonGenerator jsonOut, JASEDataObject jdo) throws IOException {
+    jsonOut.writeStartObject();
+    jsonOut.writeStringField("type", jdo.getType());
+    jsonOut.writeFieldName("data");
+    if (otms.isPrimitive(jdo)) {
+      // primitive types can be written as is.
+      jsonOut.writeString(jdo.getData().toString());
+    } else {
+      // non-primitive types need to be transmitted using a streamhandler
+      streamObject(jsonOut, jdo);
+    }
+    jsonOut.writeEndObject();
+  }
+
+  private void streamObject(JsonGenerator jsonOut, JASEDataObject jdo) throws IOException {
+    String streamHandlerClassName = "de.upb.crc901.services.streamhandlers." + jdo.getType() + "StreamHandler";
+    Class<?> streamHandlerClass;
+    try {
+      streamHandlerClass = Class.forName(streamHandlerClassName);
+    } catch (ClassNotFoundException e) {
+      throw new RuntimeException("Can't find streamhandler for semantic type " + jdo.getType());
+    }
+    StreamHandler<?> handler;
+    try {
+      handler = (StreamHandler<?>) streamHandlerClass.getConstructor().newInstance();
+    } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException
+        | NoSuchMethodException | SecurityException e) {
+      e.printStackTrace();
+      throw new RuntimeException(e); // mask exception
+    }
+
+    Method write = MethodUtils.getMatchingAccessibleMethod(streamHandlerClass, "write", JsonGenerator.class,
+        handler.getSupportedSemanticClass());
+    assert write != null : "Could not find method \"write(" + JsonGenerator.class + ", "
+        + handler.getSupportedSemanticClass() + ")\" in streamhandler class " + streamHandlerClassName;
+    try {
+      write.invoke(handler, jsonOut, jdo.getData());
+    } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+      e.printStackTrace();
+      throw new RuntimeException(e);
+    }
+  }
+
+  /**
+   * Encodes this instance and writes it chunk wise through the outStream.
+   * 
+   * @throws IOException
+   */
+  public void writeBody(OutputStream outStream) throws IOException {
+    writeBodyAsJson(outStream);
+  }
+
+  public void readfromJsonBody(InputStream input) throws IOException {
+    JsonFactory jfactory = new JsonFactory();
+    // jfactory.setCodec(new ObjectMapper());
+    JsonParser jsonIn = jfactory.createParser(input);
+    while (jsonIn.nextToken() != JsonToken.END_OBJECT) {
+      if (jsonIn.currentToken() == null) {
+        // end stream:
+        break;
+      }
+      String fieldname = jsonIn.getCurrentName();
+      if (HttpBody.CHOREOGRAPGY_FIELDNAME.equals(fieldname)) {
+        jsonIn.nextToken();
+        String composition = jsonIn.getValueAsString();
+        // composition.replaceAll("\\\"", "\"");
+        setComposition(composition);
+      } else if (HttpBody.CURRENTINDEX_FIELDNAME.equals(fieldname)) {
+        jsonIn.nextToken();
+        setCurrentIndex(jsonIn.getIntValue());
+      } else if (HttpBody.MAXINDEX_FIELDNAME.equals(fieldname)) {
+        jsonIn.nextToken();
+        setMaxIndex(jsonIn.getIntValue());
+      } else if (HttpBody.INPUTS_FIELDNAME.equals(fieldname)) {
+        jsonIn.nextToken();
+        // inputs are wrapped in a object:
+        while (jsonIn.nextToken() != JsonToken.END_OBJECT) {
+          fieldname = jsonIn.getCurrentName();
+          if (HttpBody.ARGLIST_FIELDNAME.equals(fieldname)) {
+            jsonIn.nextToken();
+            while (jsonIn.nextToken() != JsonToken.END_ARRAY) {
+              JASEDataObject jdo;
+              if (jsonIn.currentToken() == JsonToken.VALUE_NULL) {
+                jdo = null; // dont read null values in
+              } else {
+                jdo = readObject(jsonIn);
+              }
+              addPositionalArgument(jdo);
+            }
+          } else {
+            String keywrod = fieldname;
+            jsonIn.nextToken();
+            if (jsonIn.currentToken() == JsonToken.VALUE_NULL) {
+              continue; // dont read null values in
+            }
+            JASEDataObject jdo = readObject(jsonIn);
+            addKeyworkArgument(keywrod, jdo);
+          }
+        }
+      }
+
+    }
+  }
+
+  private JASEDataObject readObject(JsonParser jsonIn) throws IOException {
+    String type = null;
+    Object data = null;
+    while (jsonIn.nextToken() != JsonToken.END_OBJECT) {
+      String fieldname = jsonIn.getCurrentName();
+      if ("type".equals(fieldname)) {
+        jsonIn.nextToken();
+        type = jsonIn.getText();
+      }
+      if ("data".equals(fieldname)) {
+        if (type != null) {
+          jsonIn.nextToken();
+          data = parseData(jsonIn, type);
+        } else {
+          throw new RuntimeException("The incoming json string doesn't specify type before the data.");
+        }
+      }
+    }
+    JASEDataObject jdo = new JASEDataObject(type, data);
+    return jdo;
+  }
+
+  private Object parseData(JsonParser jsonIn, String type) throws IOException {
+    if (otms.isPrimitiveType(type)) {
+      return otms.primitiveToSemanticAsString(jsonIn.getValueAsString()).getData();
+    } else {
+      try {
+        String streamHandlerClassName = "de.upb.crc901.services.streamhandlers." + type + "StreamHandler";
+        Class<?> streamHandlerClass = Class.forName(streamHandlerClassName);
+        StreamHandler<?> handler = (StreamHandler<?>) streamHandlerClass.getConstructor().newInstance();
+
+        Method read = MethodUtils.getMatchingAccessibleMethod(streamHandlerClass, "read", JsonParser.class);
+        assert read != null : "Could not find method \"write(" + JsonParser.class + ")\" in streamhandler class "
+            + streamHandlerClassName;
+
+        return read.invoke(handler, jsonIn);
+      } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+        e.printStackTrace();
+      } catch (ClassNotFoundException e) {
+        e.printStackTrace();
+      } catch (InstantiationException | NoSuchMethodException | SecurityException e) {
+        e.printStackTrace();
+      }
+      return null;
+    }
+  }
+
+  public void readfromBody(InputStream input) throws IOException {
+    readfromJsonBody(input);
+  }
+
+
+  public boolean equals(Object object) {
+    if (object instanceof HttpBody) {
+      return equals((HttpBody) object);
+    }
+    return false;
+  }
+
+  public boolean equals(HttpBody otherBody) {
+    if (!getComposition().equals(otherBody.getComposition())) {
+      return false;
+    }
+    if (getCurrentIndex() != otherBody.getCurrentIndex()) {
+      return false;
+    }
+    if (getMaxIndex() != otherBody.getMaxIndex()) {
+      return false;
+    }
+    if (!getState().equals(otherBody.getState())) {
+      return false;
+    }
+    return true;
+  }
+
 }

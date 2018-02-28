@@ -25,11 +25,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 import de.upb.crc901.configurationsetting.compositiondomain.CompositionDomain;
-import de.upb.crc901.configurationsetting.logic.LiteralParam;
-import de.upb.crc901.configurationsetting.logic.VariableParam;
 import de.upb.crc901.configurationsetting.operation.ConfigurationState;
 import de.upb.crc901.configurationsetting.operation.Operation;
 import de.upb.crc901.configurationsetting.operation.OperationInvocation;
+import jaicore.logic.fol.structure.LiteralParam;
+import jaicore.logic.fol.structure.VariableParam;
 
 public class ServiceUtil {
 
@@ -37,7 +37,7 @@ public class ServiceUtil {
 		return getOperationInvocation(serviceCall, getObjectInputMap(inputs));
 	}
 
-	public static OperationInvocation getOperationInvocation(String serviceCall, Map<String, Object> inputs) {
+	public static OperationInvocation getOperationInvocation(String serviceCall, Map<String, ? extends Object> inputs) {
 
 		/* first create operation */
 		CompositionDomain emptyDomain = new CompositionDomain();

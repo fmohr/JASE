@@ -1,9 +1,9 @@
 /**
  * HttpServiceServer.java
  * Copyright (C) 2017 Paderborn University, Germany
- *
+ * 
  * This class provides (configured) Java functionality over the web
- *
+ * 
  * @author: Felix Mohr (mail@felixmohr.de)
  */
 
@@ -23,669 +23,708 @@
  */
 package de.upb.crc901.services.core;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpServer;
-
-import de.upb.crc901.configurationsetting.compositiondomain.CompositionDomain;
-import de.upb.crc901.configurationsetting.logic.LiteralParam;
-import de.upb.crc901.configurationsetting.logic.VariableParam;
-import de.upb.crc901.configurationsetting.operation.OperationInvocation;
-import de.upb.crc901.configurationsetting.operation.SequentialComposition;
-
-import jaicore.basic.FileUtil;
-
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Serializable;
+import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
-import org.apache.commons.lang3.math.NumberUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
+
+import de.upb.crc901.configurationsetting.compositiondomain.CompositionDomain;
+import de.upb.crc901.configurationsetting.operation.Operation;
+import de.upb.crc901.configurationsetting.operation.OperationInvocation;
+import de.upb.crc901.configurationsetting.operation.SequentialComposition;
+import jaicore.basic.FileUtil;
+import jaicore.logic.fol.structure.LiteralParam;
+import jaicore.logic.fol.structure.VariableParam;
+
 public class HttpServiceServer {
 
-  public static final Logger logger = LoggerFactory.getLogger(HttpServiceServer.class);
+	private static final Logger logger = LoggerFactory.getLogger(HttpServiceServer.class);
 
-  private static File folder = new File("http");
+	private static File folder = new File("http");
 
-  private final HttpServer server;
-  private final HttpServiceClient clientForSubSequentCalls;
-  private final OntologicalTypeMarshallingSystem otms;
-  private final ClassesConfiguration classesConfig;
-  // private final Set<String> supportedOperations = new HashSet<>();
-  // private final Map<String, Map<String, String>> resultMaps = new HashMap<>();
+	private final HttpServer server;
+	private final HttpServiceClient clientForSubSequentCalls;
+	private final OntologicalTypeMarshallingSystem otms;
+	private final ClassesConfiguration classesConfig;
+	
+	/**
+	 *  containsHostPattern is used to check if a operation contains a host address at the beginning:
+	 * 	This pattern matches like: "localhost:10/__", "10.12.14.16:100/__" or with no port at all: "10.12.14.16/__"
+	 */
+	private final static String ValidIpAddressRegex = "(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])"; // TODO do we need to support ipv6 address
+	private final static String ValidHostnameRegex = "localhost"; 
 
-  class ServiceHandle {
-    private final String id;
-    private final Object service;
+	private final static Pattern containsHostPattern = Pattern.compile(
+																		"^(" 
+																		+ ValidHostnameRegex + "|" // host name
+																		+ ValidIpAddressRegex + ")"// or ipv4 address 
+																		+ "(:\\d+)?/"
+																	); 
+	
+	
+//	private final Set<String> supportedOperations = new HashSet<>();
+//	private final Map<String, Map<String, String>> resultMaps = new HashMap<>();
 
-    /**
-     * Standard constructor
-     * 
-     * @param id
-     *          Id which the service can be accessed through
-     * @param service
-     *          inner service
-     */
-    ServiceHandle(final String id, final Object service) {
-      super();
-      this.id = id;
-      this.service = service;
-    }
+	class JavaClassHandler implements HttpHandler {
 
-    /**
-     * Constructor which is used to indicate that the serialization has failed.
-     * 
-     * @param service
-     *          inner service
-     */
-    ServiceHandle(final Object service) {
-      super();
-      this.id = null;
-      this.service = service;
-    }
+		@Override
+		public void handle(HttpExchange t) throws IOException {
 
-    /**
-     * If id is set to null, the service couldn't be serialized (see the invokeOperation method) This
-     * the server shouldn't return this servicehandle to the client. (see
-     * 
-     * @return True if the inner service was serialized to disk.
-     */
-    public boolean wasSerialized() {
-      return this.id != null;
-    }
+			String response = "";
+			HttpBody returnBody = null;
+			try {
 
-    /**
-     * Returns the id of the service. Throws Runtime-Exception if wasSerialized() returns false.
-     */
-    public String getId() {
-      if (this.wasSerialized()) {
-        return this.id;
-      } else {
-        // this service wasn't serialized. so the id shouldn't be accessed.
-        throw new RuntimeException("The service wasn't serialized. Can't access the id.");
-      }
-    }
-  }
+				/* determine method to be executed */
+				String address = t.getRequestURI().getPath().substring(1);
+				logger.info("Received query for {}", address);
 
-  class JavaClassHandler implements HttpHandler {
+				/* initiate state with the non-constant inputs given in post (non-int and non-doubles are treated as strings) */
+				if ((!"post".equalsIgnoreCase(t.getRequestMethod()))) {
+					throw new UnsupportedEncodingException("No post request");
+				}
+				InputStream input =  t.getRequestBody();
+				
+				HttpBody body = new HttpBody();
+				body.readfromBody(input);
+				
+				String[] parts = address.split("/", 3);
+				String clazz = parts[0];
+				String objectId = null;
+				if(parts.length > 1) { // address contains objectId. this request will therefore be handled as a service call.
+					objectId = parts[1];
+				}
+				else if(clazz.equals("choreography")) { // choreography call:
+					if(!body.containsComposition()) {
+						response += "objectID and no choreography was given.";
+						throw new RuntimeException(response);
+					}
+					address = body.getOperation(body.getCurrentIndex()).getOperation().getName();
+					parts = address.split("/", 3);
+					clazz = parts[0];
+					if(parts.length > 1) { // address contains objectId. this request will therefore be handled as a service call.
+						objectId = parts[1];
+					}
+					
+				}
+				if (body.getComposition() == null && objectId == null) { 
+					response += "The address: " + address + " can't be handled by this server."; 
+					throw new RuntimeException(response);
+				}
 
-    @Override
-    public void handle(final HttpExchange t) throws IOException {
+//				Map<String, JASEDataObject> initialState = new HashMap<>(body.getKeyworkArgs());
+//				Map<String, JASEDataObject> state = new HashMap<>(initialState);
+				EnvironmentState envState = body.getState();
+				envState.resetStartingField();
+				logger.info("Input keys are: {}", 
+						StreamSupport.stream(envState.startingFieldNames().spliterator(), false).collect(Collectors.joining(", ")));
 
-      String response = "";
-      try {
+				/*
+				 * analyze choreography in order to see what we actually will execute right away: 1. move to position of current call; 2. compute all subsequent calls on same host and on services
+				 * spawend from here.
+				 * 
+				 */
+				SequentialCompositionCollection comp = null;
+				SequentialComposition subsequenceComp = new SequentialComposition(new CompositionDomain());
+				OperationInvocation invocationToMakeFromHere = null;
+				if (body.containsComposition()) {
+					comp = body.parseSequentialComposition();
+					Iterator<OperationInvocation> it = comp.iterator();
+					Collection<String> servicesInExecEnvironment = new HashSet<>();
+					for(String field : body.getState().serviceHandleFieldNames()) {
+						if(!((ServiceHandle)body.getState().retrieveField(field).getData()).isRemote()) {
+							servicesInExecEnvironment.add(field);
+						}
+					}
+					for (int i = 0; it.hasNext(); i++) {
+						OperationInvocation opInv = it.next();
+						if(body.isBelowExecutionBound(i)) {
+							continue; // ignore indexes before the current one
+						}
+						if(body.isAboveExecutionBound(i)) {
+							break; // ignore operations above maxindex.
+						}
+						invocationToMakeFromHere = opInv;
+						String opName = opInv.getOperation().getName();
+						if (opName.contains("/")) {
+							String host = opName.substring(0, opName.indexOf("/"));
+							String myAddress = t.getLocalAddress().toString().substring(1);
+//							if (!host.equals(myAddress)) {
+//								break;
+//							}
+							if(!canExecute(opInv)) { // if this server can't execute this operation exit the loop here. invocationToMakeFromHere will then contain the address of the next invocation.
+								//throw new RuntimeException("Can't execute this service: " +  opInv.toString());
+								break;
+							}
+							/* if this is a constructor, also add the created instance to the locally available services */
+							servicesInExecEnvironment.add(opName);
+							if (opName.contains("__construct")) {
+								servicesInExecEnvironment.add(opInv.getOutputMapping().values().iterator().next().getName());
+							}
+						} else if (!servicesInExecEnvironment.contains(opName.substring(0, opName.indexOf("::")))) {
+							break;
+						}
+						subsequenceComp.addOperationInvocation(opInv);
+						invocationToMakeFromHere = null;
+					}
+				} else {
+					OperationInvocation opinv;
+					if (objectId.equals("__construct")) {
 
-        /* determine method to be executed */
-        String address = t.getRequestURI().getPath().substring(1);
-        logger.info("Received query for {}", address);
+						/* creating new object */
+						opinv = ServiceUtil.getOperationInvocation(t.getLocalAddress().toString().substring(1) + "/" + clazz + "::__construct", envState.getCurrentMap());
 
-        /*
-         * initiate state with the non-constant inputs given in post (non-int and non-doubles are treated as
-         * strings)
-         */
-        HttpBody body = HttpBody.decode(t, HttpServiceServer.this.otms);
+					} else {
+						opinv = ServiceUtil.getOperationInvocation(t.getLocalAddress().toString().substring(1) + "/" + clazz + "/" + objectId + "::" + parts[2], envState.getCurrentMap());
+					}
+					subsequenceComp.addOperationInvocation(opinv);
+				}
 
-        String[] parts = address.split("/", 3);
-        String clazz = parts[0];
-        String objectId = null;
-        if (parts.length > 1) { // address contains objectId. this request will therefore be handled as a service call.
-          objectId = parts[1];
-        } else if (clazz.equals("choreography")) { // choreography call:
-          if (!body.containsCoreography()) {
-            response += "objectID and no choreography was given.";
-            throw new RuntimeException(response);
-          }
-          address = body.getOperation(body.getCurrentIndex()).getOperation().getName();
-          parts = address.split("/", 3);
-          clazz = parts[0];
-          if (parts.length > 1) { // address contains objectId. this request will therefore be handled as a service call.
-            objectId = parts[1];
-          }
+				/* execute the whole induced composition */
 
-        }
-        if (objectId == null) {
-          response += "The address: " + address + " can't be handled by this server.";
-          throw new RuntimeException(response);
-        }
+				int currentIndex = body.getCurrentIndex();
+				for (OperationInvocation opInv : subsequenceComp) {
+					invokeOperation(opInv, envState);
+					currentIndex++;
+				}
+				logger.info("Finished local execution. Now invoking {}", invocationToMakeFromHere);
 
-        Map<String, Object> initialState = body.getInputs();
-        Map<String, Object> state = new HashMap<>(initialState);
-        logger.info("Input keys are: {}", initialState.keySet());
+				/* forward next service */
+				if (invocationToMakeFromHere != null) {
 
-        /*
-         * analyze choreography in order to see what we actually will execute right away: 1. move to
-         * position of current call; 2. compute all subsequent calls on same host and on services spawend
-         * from here
-         **/
-        SequentialComposition comp = null;
-        SequentialComposition subsequenceComp = new SequentialComposition(new CompositionDomain());
-        OperationInvocation invocationToMakeFromHere = null;
-        if (body.containsCoreography()) {
-          comp = body.getComposition();
-          Iterator<OperationInvocation> it = comp.iterator();
-          Collection<String> servicesInExecEnvironment = new HashSet<>();
-          for (int i = 0; it.hasNext(); i++) {
-            OperationInvocation opInv = it.next();
-            if (body.isBelowExecutionBound(i)) {
-              continue; // ignore indexes before the current one
-            }
-            if (body.isAboveExecutionBound(i)) {
-              break; // ignore operations above maxindex.
-            }
-            invocationToMakeFromHere = opInv;
-            String opName = opInv.getOperation().getName();
-            if (opName.contains("/")) {
-              // String host = opName.substring(0, opName.indexOf("/"));
-              // String myAddress = t.getLocalAddress().toString().substring(1);
-              // if (!host.equals(myAddress))
-              // break;
-              if (!HttpServiceServer.this.canExecute(opInv)) { // if this server can't execute this operation exit the loop here. invocationToMakeFromHere will
-                                                               // then contain the address of the next invocation.
-                break;
-              }
-              /* if this is a constructor, also add the created instance to the locally available services */
-              servicesInExecEnvironment.add(opName);
-              if (opName.contains("__construct")) {
-                servicesInExecEnvironment.add(opInv.getOutputMapping().values().iterator().next().getName());
-              }
-            } else if (!servicesInExecEnvironment.contains(opName.substring(0, opName.indexOf("::")))) {
-              break;
-            }
-            subsequenceComp.addOperationInvocation(opInv);
-            invocationToMakeFromHere = null;
-          }
-        } else {
-          OperationInvocation opinv;
-          if (objectId.equals("__construct")) {
+					/* extract vars from state that are in json (ordinary data but not service references) */
+					OperationPieces pieces = new OperationPieces(invocationToMakeFromHere.getOperation().getName());
+					ServiceCompositionResult result;
+					
+					// create a shallow copy of the state we have:
+					EnvironmentState forwardInputs = new EnvironmentState(); // forwarded to the other server
+					for(String fieldName : envState.currentFieldNames()) {
+						JASEDataObject field = envState.retrieveField(fieldName);
+						if(field.isofType("ServiceHandle")) {
+							ServiceHandle sh = (ServiceHandle) field.getData();
+							if(sh.isRemote()) { // only forward remote services
+								forwardInputs.addField(fieldName, field);
+							}
+						} else {
+							// TODO what do we need to forward?
+							forwardInputs.addField(fieldName, field);
+						}
+					}
+					
+					HttpBody forwardBody = new HttpBody(forwardInputs, body.getComposition(), currentIndex, -1);
+					
+					if(pieces.hasHost()) {
+						result = new EasyClient().withBody(forwardBody).withHost(pieces.getHost()).dispatch();
+					}else if(envState.containsField(pieces.getId())){
+						
+						if (!(envState.retrieveField(pieces.getId()).getData() instanceof ServiceHandle)) {
+							throw new RuntimeException("The refered object " + pieces.getId() + " was of type "
+									+ envState.retrieveField(pieces.getId()).getType());
+						}
+						ServiceHandle handler = (ServiceHandle) envState.retrieveField(pieces.getId()).getData();
+						result = new EasyClient().withBody(forwardBody).withService(handler).dispatch();
+					}
+					else {
+						throw new RuntimeException("Can't forward the rest of the message.");
+					}
+					envState.extendBy(result);
+					response += result.toString();
+					logger.info("Received answer from subsequent service.");
+				}
 
-            /* creating new object */
-            opinv = ServiceUtil.getOperationInvocation(t.getLocalAddress().toString().substring(1) + "/" + clazz + "::__construct", state);
+				/* now returning the serializations of all created (non-service) objects */
+				logger.info("Returning answer to sender");
+				returnBody = new HttpBody();
+				for (String key : envState.addedFieldNames()) {
+					JASEDataObject answerObject = envState.retrieveField(key);
+					if(answerObject == null) {
+						continue;
+					}
+					returnBody.addKeyworkArgument(key, (JASEDataObject) answerObject);
+				}
+			} catch (InvocationTargetException e) {
+				e.getTargetException().printStackTrace();
+			} catch (Throwable e) {
+				e.printStackTrace();
+			} finally {
+				OutputStream os;
+				if(returnBody!=null) {
+					t.sendResponseHeaders(200, 0);
+					os = t.getResponseBody();
+					returnBody.writeBody(os);
+				}else {
+					t.sendResponseHeaders(400, 0);
+					os = t.getResponseBody();
+					os.write(response.getBytes());
+					os.flush();
+				}
+				os.close();
+			}
 
-          } else {
-            opinv = ServiceUtil.getOperationInvocation(t.getLocalAddress().toString().substring(1) + "/" + clazz + "/" + objectId + "::" + parts[2], state);
-          }
-          subsequenceComp.addOperationInvocation(opinv);
-        }
+		}
 
-        /* execute the whole induced composition */
-        for (OperationInvocation opInv : subsequenceComp) {
-          HttpServiceServer.this.invokeOperation(opInv, state);
-        }
-        logger.info("Finished local execution. Now invoking {}", invocationToMakeFromHere);
+		
+	}
+	
+	private boolean canExecute(OperationInvocation opInv) {
+		String opName = opInv.getOperation().getName();
+		
+		if(opName.contains("__construct")) {
+			// extract class name
+			String clazz = opName.substring(opName.indexOf("/") + 1).split("::")[0];
+			return classesConfig.classknown(clazz); // returns true if the class is known.
+		}
+		else { // lets hope we know how to execute this. TODO see if there are cases where we can't execute an op without '__construct'
+			return true;
+		}
+	}
+	/**
+	 * Resolves the arguments from a given operation invocation object.
+	 * This invocation may have arguments, like: op({"a", 12, field1}). 
+	 * In this the list will contain 3 JASEDataObject objects: first one is a string the second one number type and the third will be retrieved from the EnvironmentState variable.
+	 * 	 */
+	private List<JASEDataObject> resolveArguments(OperationInvocation operationInvocation, EnvironmentState envState){
+		
+		Operation operation = operationInvocation.getOperation();
+		List<VariableParam> inputs = operation.getInputParameters();
+		
+		List<JASEDataObject> arguments = new ArrayList<>();
+		
+		Map<VariableParam, LiteralParam> inputMapping = operationInvocation.getInputMapping();
+		
+		OntologicalTypeMarshallingSystem otms = new OntologicalTypeMarshallingSystem();
+		
+		for (int j = 0; j < inputs.size(); j++) {
+			JASEDataObject argument = null;
+			String stringValue = inputMapping.get(inputs.get(j)).getName(); 
+			/* stringValue is a string encoded value. 
+			  this value could be a number like: 12 
+			  or a boolean value like: true
+			  or it could be a string value in which case it has to be in between quotation marks. like: "abc" */
+			if (otms.isPrimitiveNumber(stringValue)) {
+				argument = otms.primitiveToSemanticAsString(stringValue);
+			} else if (otms.isPrimitiveBoolean(stringValue)) {
+				argument = otms.primitiveToSemanticAsString(stringValue);
+			} else if(stringValue.startsWith("\"") && stringValue.endsWith("\"")) {
+				stringValue = stringValue.substring(1, stringValue.length() -1); // remove quotation marks
+				argument = otms.primitiveToSemantic(stringValue);
+			}
+			/* if the value isn't meant to be of primitive type then it is assumed to be a fieldname. */
+			else if (envState.containsField(stringValue)) {
+				String fieldName = stringValue;
+				argument = envState.retrieveField(fieldName);
+			} else {
+				throw new IllegalArgumentException("Cannot find value for argument " + stringValue + " in state table.");
+			}
+			arguments.add(argument);
+		}
+		return arguments;
+	}
+	private final class OperationPieces {
+		final boolean hasHost;
+		final String host; // host contains "/" at the end
+		final String context;
+		final String invocation;
+		final String classpath;
+		final String id;
+		OperationPieces(String operationStringValue){
+			String hostContext;
+			if(operationStringValue.contains("::")) {
+				String[] hostContextOperationSplit = operationStringValue.split("::");
+				hostContext = hostContextOperationSplit[0];
+				invocation = hostContextOperationSplit[1];
+			} else {
+				hostContext = operationStringValue;
+				invocation = "__construct";
+			}
+			if(startsWithHost(hostContext)) {
+				hasHost = true;
+				host = extractHost(hostContext);
+			} else {
+				hasHost = false;
+				host = "";
+			}
+			if(hasHost) {
+				context = hostContext.substring(host.length());
+			} else {
+				context = hostContext;
+			}
+			if(context.contains("/")) {
+				String classPathId[] = context.split("/");
+				classpath = classPathId[0];
+				id = classPathId[1];
+			}else {
+				if(isConstructorInvocation()) {
+					classpath = context;
+					id = "";
+				}else {
+					classpath = "";
+					id = context;
+				}
+			}
+		}
+		
+		boolean hasHost() {
+			return hasHost;
+		}
+		boolean hasClasspathAndId() {
+			return !id.isEmpty() && !classpath.isEmpty();
+		}
+		String getId() {
+			return id;
+		}
+		String getServiceName() {
+			return context;
+		}
+		String getHost() {
+			return host;
+		}
+		String getClasspath() {
+			return classpath;
+		}
+		String getMethodname() {
+			return invocation;
+		}
+		boolean isConstructorInvocation() {
+			return invocation.equalsIgnoreCase("__construct");
+		}
+	}
+	private void invokeOperation(OperationInvocation operationInvocation, EnvironmentState envState) throws IllegalAccessException, IllegalArgumentException,
+			InvocationTargetException, NoSuchMethodException, SecurityException, ClassNotFoundException, InstantiationException {
+		logger.info("Performing invocation {} in state {}", operationInvocation, envState);
+		
+		List<JASEDataObject> inputList = resolveArguments(operationInvocation, envState);
 
-        /* call next service */
-        if (invocationToMakeFromHere != null) {
+		/* if this operation is a constructor, create the corresponding service and return the url */
+		String opName = operationInvocation.getOperation().getName();
+		Map<VariableParam, VariableParam> outputMapping = operationInvocation.getOutputMapping();
+		OperationPieces opPieces = new OperationPieces(opName);
+		Map<String, String> resultKeywordMap;
+		Object basicResult;
+		Object[] inputArgs;
+		if(opPieces.isConstructorInvocation()) {
+			logger.info("The invocation cr eates a new service instance");
+			Class<?> serviceClass = null;
+			try {
+				serviceClass = Class.forName(opPieces.getClasspath());
+			} catch(java.lang.ClassNotFoundException ex) {
+				logger.error("CLASS NOT FOUND : " + opPieces.getClasspath());
+				return;
+			}
+			Constructor<?> constructor = getConstructor(serviceClass, inputList);
+			java.util.Objects.requireNonNull(constructor, "No constructor found for " + serviceClass);
+			if (logger.isDebugEnabled())
+				logger.debug("{}/{}/{}", inputList, constructor.getParameterCount(), constructor);
+			
+			Object newService = null;
+			 
+			boolean wrapped = classesConfig.isWrapped(opPieces.getClasspath()); // true if this class is supposed to be wrapped.
+			ServiceWrapper wrapper = null;
 
-          /* extract vars from state that are in json (ordinary data but not service references) */
-          Map<String, Object> inputsToForward = new HashMap<>();
-          for (String key : state.keySet()) {
-            Object val = state.get(key);
-            if (val instanceof JsonNode) {
-              inputsToForward.put(key, val);
-            }
-          }
-          ServiceCompositionResult result = HttpServiceServer.this.clientForSubSequentCalls.callServiceOperation(invocationToMakeFromHere, comp, inputsToForward);
-          response += result.toString();
-          logger.info("Received answer from subsequent service.");
-        }
+			if(wrapped) { // create the wrapper.
+				String wrapperClasspath = classesConfig.getWrapperClasspath(opPieces.getClasspath());
+				Class<?> wrapperClass = Class.forName(wrapperClasspath);
+				Constructor<? extends ServiceWrapper> wrapperConstructor = (Constructor<? extends ServiceWrapper>)
+						wrapperClass.getConstructor(ServiceWrapper.CONSTRUCTOR_TYPES);
+				// create the wrapper by giving it the constructor and the values.
+				JASEDataObject[] boxedArgs = inputList.toArray(new JASEDataObject[inputList.size()]);
+				if(boxedArgs.length > 0) {
+					wrapper = wrapperConstructor.newInstance(constructor, boxedArgs);	
+				} else {
+					wrapper = wrapperConstructor.newInstance(constructor, new JASEDataObject[0]);
+				}
+				newService = wrapper.getDelegate();
+			}
+			else {
+				Object[] parsedArgs = otms.objectArrayFromSemantic(constructor.getParameterTypes(), inputList);
+				// create the service itself;
+				newService = constructor.newInstance(parsedArgs);
+			}
+			// create service handle by identifying the service with an unique identifier.
+			String id = UUID.randomUUID().toString();
+			ServiceHandle sh;
+			if(!wrapped) {
+				sh  = new ServiceHandle(opPieces.getClasspath(), id, newService);
+			}
+			else {
+				sh = new ServiceHandle(opPieces.getClasspath(), id, wrapper);
+			}
+			boolean serializationSuccess = false; // be pessimistic about result. Set to true if it worked.
+			// if wrapped and wrappers'delegate can be serialized or it wasn't wrapped and the service itself can be serialized.
+			
+			if (newService instanceof Serializable) {  
+				/* serialize result */
+				try {
+					FileUtil.serializeObject(wrapped ? wrapper : newService, getServicePath(opPieces.getClasspath(), id));
+					// no problems occurred.. success
+					serializationSuccess = true;
+				} catch (IOException e) {
+					logger.error(e.getMessage() + "\n" + Arrays.toString(e.getStackTrace()));
+				}
+			}
+			
+			if(!serializationSuccess) {
+				// serialization wasn't successful.
+				sh = sh.unsuccessedSerialize();
+			}
+			basicResult = new JASEDataObject(ServiceHandle.class.getSimpleName(), sh);
+			inputArgs = new Object[0];
+			resultKeywordMap = classesConfig.getMethodResultMap(opPieces.getClasspath(), opPieces.getMethodname());
+		} else {
+			try {
+				logger.info("Run invocation on an existing service instance");
+				ServiceHandle handler = null;
+				if (opPieces.hasClasspathAndId()) {
+					// load from disk:
+					Object service = FileUtil
+							.unserializeObject(getServicePath(opPieces.getClasspath(), opPieces.getId()));
+					handler = new ServiceHandle(opPieces.getClasspath(), opPieces.getId(), service);
+				} else {
+					if (!envState.containsField(opPieces.getServiceName())) {
+						throw new RuntimeException("The handler wasn't found in the state.");
+					}
+					if (!(envState.retrieveField(opPieces.getServiceName()).getData() instanceof ServiceHandle)) {
+						throw new RuntimeException("The refered object " + opPieces.getId() + " was of type "
+								+ envState.retrieveField(opPieces.getId()).getType());
+					}
+					ServiceHandle emptyHandler = (ServiceHandle) envState.retrieveField(opPieces.getId()).getData();
+					if(emptyHandler.containService()) {
+						handler = emptyHandler;
+					} else {
+						Object service = FileUtil.unserializeObject(getServicePath(emptyHandler.getClasspath(), emptyHandler.getId()));
+						handler = emptyHandler.withService(service);
+						// replace the servicehandler in state so that next time the service is already unserialized:
+						envState.addField(opPieces.getServiceName(), otms.objectToSemantic(handler));
+					}
+				}
+				boolean wrapped = classesConfig.isWrapped(handler.getClasspath());
+				boolean delegate = false; // if delegate equals true then the wrapper doesn't overwrite the method.
+				Method method = null;
+				if (wrapped) {
+					// This clazz is wrapped.
+					String wrapperClazz = classesConfig.getWrapperClasspath(handler.getClasspath());
+					// Find out if the method is 'overwritten' in the wrapper.
+					// If it isn't overwritten use the clazz itself to get the method.
+					method = getMethod(Class.forName(wrapperClazz), opPieces.getMethodname(), inputList);
+					delegate = false;
+				}
+				if (method == null) { // either this clazz isn't wrapped or the method wasn't overwritten.
+					delegate = true;
+					method = getMethod(Class.forName(handler.getClasspath()), opPieces.getMethodname(), inputList);
+				}
+				if (method == null) { // The method is still not found.
+					throw new UnsupportedOperationException(
+							"Cannot invoke " + opPieces.getMethodname() + " for types " + inputList.toString()
+									+ ". The method does not exist in class " + opPieces.getClasspath() + ".");
+				}
 
-        /* now returning the serializations of all created (non-service) objects */
-        logger.info("Returning answer to sender");
-        ObjectNode objectsToReturn = new ObjectMapper().createObjectNode();
-        for (String key : state.keySet()) {
-          Object answerObject = state.get(key);
-          if (!initialState.containsKey(key)) {
-            if (answerObject == null) {
-              objectsToReturn.putNull(key);
-            } else if ((answerObject instanceof ObjectNode)) {
-              objectsToReturn.set(key, (JsonNode) answerObject);
-            } else if (answerObject instanceof String) {
-              objectsToReturn.put(key, (String) answerObject);
-            } else if (answerObject instanceof Double) {
-              objectsToReturn.put(key, (Double) answerObject);
-            } else if (answerObject instanceof Integer) {
-              objectsToReturn.put(key, (Integer) answerObject);
-            } else if (answerObject instanceof ServiceHandle) {
-              ServiceHandle handle = (ServiceHandle) answerObject;
-              if (handle.wasSerialized()) {
-                // Return the handle only if the service was serialized and can be accessed.
-                objectsToReturn.put(key, t.getLocalAddress().toString().substring(1) + "/" + clazz + "/" + handle.getId());
-              }
-            } else {
-              throw new IllegalArgumentException("Do not know how to treat object " + answerObject + " as it is not serialized to some json thing");
-            }
-          }
-        }
-        response += objectsToReturn.toString();
-      } catch (InvocationTargetException e) {
-        e.getTargetException().printStackTrace();
-      } catch (Throwable e) {
-        e.printStackTrace();
-      } finally {
-        t.sendResponseHeaders(200, response.length());
-        OutputStream os = t.getResponseBody();
-        os.write(response.getBytes());
-        os.close();
-      }
+				/* rewrite values according to the choice */
+				Class<?>[] requiredTypes = method.getParameterTypes();
+				// logger.info("Values that will be used: {}", Arrays.toString(values));
+				inputArgs = otms.objectArrayFromSemantic(requiredTypes, inputList);
+				try {
+					// invoke method from service.
+					// service is the wrapper object itself if the service is set to be wrapped in
+					// the config.
+					if (wrapped && delegate) {
+						// if wrapped and delegate then the method is defined in the delegate object of
+						// the wrapper
+						basicResult = method.invoke(((ServiceWrapper) handler.getService()).delegate, inputArgs);
+					} else {
+						// No delegation method can be found in class from the object of service:
+						basicResult = method.invoke(handler.getService(), inputArgs);
+					}
+				} catch (Exception e) {
+					logger.error(operationInvocation + " error: " + e.getMessage());
+					e.printStackTrace();
+					throw new RuntimeException(operationInvocation + " error: " + e.getMessage());
+				}
+				if(handler.isSerialized()) {
+					try {	
+						FileUtil.serializeObject(handler.getService(), getServicePath(handler.getClasspath(), handler.getId()));
+					}
+					catch(Exception ex) {
+						logger.error("Can't serialize class: " + handler.getClasspath()+ ". Serialization throws Exception: " + ex.getMessage());
+						ex.printStackTrace();
+					}
+				}
+				resultKeywordMap = classesConfig.getMethodResultMap(handler.getClasspath(), opPieces.getMethodname());
+				if (logger.isDebugEnabled()) {
+					logger.debug("Invocation done. Result is: {}", basicResult);
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+				throw new RuntimeException(e);
+			}
+		}
+		/* compute the result of the invocation (resolve call-by-reference outputs) */
+		OperationInvocationResult result = new OperationInvocationResult();
+		
+		for (String key : resultKeywordMap.keySet()) {
+			String val = resultKeywordMap.get(key);
+			if (val.equals("return")) {
+				result.put(key, basicResult);
+			} else if (val.matches("i[\\d]+")) {
+				int inputIndex = Integer.parseInt(val.substring(1));
+				result.put(key, inputArgs[inputIndex - 1]);
+			} else {
+				logger.error("Cannot process result map entry {}", val);
+				throw new RuntimeException("Cannot process result map entry " + val);
+			}
+		}
+		
 
-    }
+		/* now update state table based on result mapping */
+		for (String key : result.keySet()) {
+			VariableParam targetParam = outputMapping.get(new VariableParam(key));
+			if (targetParam == null)
+				throw new IllegalArgumentException("The parameter " + key + " used in the result mapping of " + opName
+						+ " is not a declared output parameter of the operation! "
+						+ "Declared output params are: " + operationInvocation.getOperation().getOutputParameters());
+			String nameOfStateVariableToStoreResultIn = targetParam.getName();
+			Object processedResult = result.get(key);
+			JASEDataObject objectToStore = null;
+			if(processedResult != null) {
+				 objectToStore = otms.allToSemantic(processedResult, false);
+				 //  TODO do we really need to translate to json again?
+			}
+			envState.addField(nameOfStateVariableToStoreResultIn,
+					objectToStore);
+		}
+	}
+	
+	/**
+	 * Creates the file path for the given classpath and serviceid.
+	 * @param serviceClasspath classpath of the service.
+	 * @param serviceId id of the service.
+	 * @return file path to the service.
+	 */
+	private String getServicePath(String serviceClasspath, String serviceId) {
+		return folder + File.separator + "objects" + File.separator + serviceClasspath + File.separator + serviceId;
+	}
 
-  }
+	private Constructor<?> getConstructor(Class<?> clazz, List<JASEDataObject> inputs) {
+		if (!classesConfig.classknown(clazz.getName())) {
+			throw new IllegalArgumentException("This server is not configured to create new objects of " + clazz);
+		}
+		for (Constructor<?> constr : clazz.getDeclaredConstructors()) {
+			Class<?> requiredParams[] = constr.getParameterTypes();
+			if (matchParameters(requiredParams, inputs))
+				return constr;
+		}
+		return null;
+	}
+	
+	
 
-  private boolean canExecute(final OperationInvocation opInv) {
-    String opName = opInv.getOperation().getName();
+	private boolean matchParameters(Class<?>[] requiredTypes, List<JASEDataObject> providedTypes) {
+		if (requiredTypes.length > providedTypes.size())
+			return false;
+		for (int i = 0; i < requiredTypes.length; i++) {
+			JASEDataObject providedData = providedTypes.get(i);
+			if (!otms.isLinkImplemented(providedTypes.get(i).getType(), requiredTypes[i])) {
+				logger.debug("The required type is: ", requiredTypes[i] + " but the provided one has semantic type of " + requiredTypes[i]);
+				return false;
+			}
+		}
+		return true;
+	}
 
-    if (opName.contains("__construct")) {
-      // extract class name
-      String clazz = opName.substring(opName.indexOf("/") + 1).split("::")[0];
-      return this.classesConfig.classknown(clazz); // returns true if the class is known.
-    } else { // lets hope we know how to execute this. TODO see if there are cases where we can't execute an op
-             // without '__construct'
-      return true;
-    }
-  }
+	private Method getMethod(Class<?> clazz, String methodName, List<JASEDataObject> providedTypes) {
+		if (!classesConfig.methodKnown(clazz.getName(), methodName)) {
+			logger.info("The operation " + clazz.getName() + "::" + methodName + " is not supported by this server.");
+			return null;
+		}
+		for (Method method : clazz.getMethods()) {
+			if (!method.getName().equals(methodName))
+				continue;
+			Class<?> requiredParams[] = method.getParameterTypes();
+			if (matchParameters(requiredParams, providedTypes))
+				return method;
+			else {
+				logger.debug("Method {} with params {} matches the required method name but is not satisfied by ", methodName, Arrays.toString(requiredParams),
+						providedTypes);
+			}
+		}
+		return null;
+	}
+	/**
+	 * Returns true if the given text starts with a host name. See 'containsHostPattern'
+	 */
+	private boolean startsWithHost(String text) {
+		return containsHostPattern.matcher(text).find();
+	}
+	private String extractHost(String text) {
+		Matcher matcher =  containsHostPattern.matcher(text);
+		if(matcher.find()) {
+			return matcher.group();
+		} else {
+			return "";
+		}
+	}
 
-  private void invokeOperation(final OperationInvocation operationInvocation, final Map<String, Object> state)
-      throws IllegalAccessException, IllegalArgumentException, InvocationTargetException, NoSuchMethodException, SecurityException, ClassNotFoundException, InstantiationException {
-    logger.info("Performing invocation {} in state {}", operationInvocation, state.keySet());
-    List<VariableParam> inputs = operationInvocation.getOperation().getInputParameters();
-    String[] types = new String[inputs.size()];
-    Object[] values = new Object[inputs.size()];
-    Map<VariableParam, LiteralParam> inputMapping = operationInvocation.getInputMapping();
-    for (int j = 0; j < inputs.size(); j++) {
-      String val = inputMapping.get(inputs.get(j)).getName();
+	public HttpServiceServer(int port) throws IOException {
+		this(port, "conf/classifiers.json", "conf/preprocessors.json", "conf/others.json");
+	}
+	
+	/**
+	 * Creates the standard test server.
+	 */
+	public static HttpServiceServer TEST_SERVER() throws IOException {
+		return new HttpServiceServer(8000, "testrsc/conf/classifiers.json", "testrsc/conf/preprocessors.json", "testrsc/conf/others.json");
+	}
 
-      /* first try native types */
-      if (NumberUtils.isNumber(val)) {
-        if (val.contains(".")) {
-          values[j] = Double.valueOf(val);
-        } else {
-          types[j] = Integer.TYPE.getName();
-          values[j] = Integer.valueOf(val);
-        }
-      } else if (val.startsWith("\"") && val.endsWith("\"")) {
-        types[j] = String.class.getName();
-        values[j] = val.substring(1, val.length() - 1); // remove quotation marks
-      }
+	public HttpServiceServer(int port, String... FILE_CONF_CLASSES) throws IOException {
+		/* moved the operation configuration into the classes.json configuration for more flexibility.*/
+		this.classesConfig = new ClassesConfiguration(FILE_CONF_CLASSES);
+		otms = new OntologicalTypeMarshallingSystem();
+		clientForSubSequentCalls = new HttpServiceClient(otms);
+		server = HttpServer.create(new InetSocketAddress(port), 100);
+		
 
-      /* if the value is a variable in our current state, use this */
-      else if (state.containsKey(val)) {
-        JsonNode var = (JsonNode) state.get(val);
-        if (var.isNumber()) {
-          if (var.asText().contains(".")) {
-            values[j] = var.asDouble();
-          } else {
-            types[j] = Integer.TYPE.getName();
-            values[j] = var.asInt();
-          }
-        } else if (var.isTextual()) {
-          types[j] = String.class.getName();
-          values[j] = var.asText();
-        } else {
-          types[j] = var.get("type").asText();
-          values[j] = var;
-        }
-      } else {
-        throw new IllegalArgumentException("Cannot find value for argument " + val + " in state table.");
-      }
-    }
+        // Set an Executor for the multi-threading
+        server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(16));
+        
+		server.createContext("/", new JavaClassHandler());
+		server.start();
+		logger.info("Server is up ...");
+	}
+	
+	public void shutdown() {
+		server.stop(0);
+	}
 
-    /* if this operation is a constructor, create the corresponding service and return the url */
-    String opName = operationInvocation.getOperation().getName();
-    Map<VariableParam, VariableParam> outputMapping = operationInvocation.getOutputMapping();
-    String clazz = "";
-    String methodName = "";
-    String fqOpName = "";
-    Object basicResult = null;
-    if (opName.contains("/")) { // if this is a service called via an address
+	public static void main(String[] args) throws Exception {
+//		new HttpServiceServer(8000);
+		TEST_SERVER();
+	}
 
-      logger.info("Run invocation on a service that has not been created previously");
-
-      fqOpName = opName;
-      String[] parts = opName.substring(opName.indexOf("/") + 1).split("::");
-      clazz = parts[0];
-      methodName = parts[1];
-      if (methodName.equals("__construct")) {
-        logger.info("The invocation creates a new service instance");
-        Class serviceClass = null;
-        try {
-          serviceClass = Class.forName(clazz);
-          ;
-        } catch (java.lang.ClassNotFoundException ex) {
-          logger.error("CLASS NOT FOUND : " + clazz);
-          return;
-        }
-        Constructor<?> constructor = this.getConstructor(serviceClass, types);
-        if (logger.isDebugEnabled()) {
-          logger.debug("{}/{}/{}", types.length, constructor.getParameterCount(), constructor);
-        }
-
-        Object newService = null;
-
-        boolean wrapped = this.classesConfig.isWrapped(clazz); // true if this class is supposed to be wrapped.
-        ServiceWrapper wrapper = null;
-        if (wrapped) { // create the wrapper.
-          String wrapperClasspath = this.classesConfig.getWrapperClasspath(clazz);
-          Class<?> wrapperClass = Class.forName(wrapperClasspath);
-          Constructor<? extends ServiceWrapper> wrapperConstructor = (Constructor<? extends ServiceWrapper>) wrapperClass.getConstructor(ServiceWrapper.CONSTRUCTOR_TYPES);
-          // create the wrapper by giving it the constructor and the values.
-          wrapper = wrapperConstructor.newInstance(constructor, values);
-          newService = wrapper.getDelegate();
-        } else {
-          // create the service itself;
-          newService = constructor.newInstance(values);
-        }
-        // create service handle by identifying the service with an unique identifier.
-        String id = UUID.randomUUID().toString();
-        ServiceHandle sh;
-        if (!wrapped) {
-          sh = new ServiceHandle(id, newService);
-        } else {
-          sh = new ServiceHandle(id, wrapper);
-        }
-        boolean serializationSuccess = false; // be pessimistic about result. Set to true if it worked.
-        // if wrapped and wrappers'delegate can be serialized or it wasn't wrapped and the service itself
-        // can be serialized.
-        if (newService instanceof Serializable) {
-          /* serialize result */
-          try {
-            FileUtil.serializeObject(wrapped ? wrapper : newService, this.getServicePath(clazz, id));
-            // no problems occurred.. success
-            serializationSuccess = true;
-          } catch (IOException e) {
-            logger.error(e.getMessage() + "\n" + Arrays.toString(e.getStackTrace()));
-          }
-        }
-        if (!serializationSuccess) {
-          // serialization wasn't successful.
-          /*
-           * reset the ServiceHandle with id = null to indicate that this service wasn't serialized
-           * successfully.
-           */
-          sh = new ServiceHandle(sh.service);
-        }
-        // Put the handler into the state.
-        state.put(outputMapping.values().iterator().next().getName(), sh);
-        return;
-      }
-
-      /* otherwise execute the operation on the given service */
-      else {
-
-        logger.info("Run invocation on an existing service instance");
-        clazz = parts[0].substring(0, parts[0].lastIndexOf("/"));
-        String objectId = parts[0].substring(clazz.length() + 1);
-        boolean wrapped = this.classesConfig.isWrapped(clazz);
-        boolean delegate = false; // if delegate equals true then the wrapper doesn't overwrite the method.
-        try {
-          Method method = null;
-          if (wrapped) {
-            // This clazz is wrapped.
-            String wrapperClazz = this.classesConfig.getWrapperClasspath(clazz);
-            // Find out if the method is 'overwritten' in the wrapper.
-            // If it isn't overwritten use the clazz itself to get the method.
-            method = this.getMethod(Class.forName(wrapperClazz), methodName, types);
-            delegate = false;
-          }
-          if (method == null) { // either this clazz isn't wrapped or the method wasn't overwritten.
-            delegate = true;
-            method = this.getMethod(Class.forName(clazz), methodName, types);
-          }
-          if (method == null) { // The method is still not found.
-            throw new UnsupportedOperationException("Cannot invoke " + methodName + " for types " + Arrays.toString(types) + ". The method does not exist in class " + clazz + ".");
-          }
-
-          Object service = FileUtil.unserializeObject(this.getServicePath(clazz, objectId));
-
-          /* rewrite values according to the choice */
-          Class<?>[] requiredTypes = method.getParameterTypes();
-          // logger.info("Values that will be used: {}", Arrays.toString(values));
-          for (int i = 0; i < requiredTypes.length; i++) {
-            if (!requiredTypes[i].isPrimitive() && !requiredTypes[i].getName().equals("String")) {
-              logger.debug("map {}-th input to {}", i, requiredTypes[i].getName());
-              if (values[i] instanceof ObjectNode) {
-                // System.out.print(values[i] + " -> ");
-                // System.out.println(otms.jsonToObject((JsonNode) values[i], requiredTypes[i]));
-              }
-              values[i] = this.otms.jsonToObject((JsonNode) values[i], requiredTypes[i]);
-            }
-          }
-          try {
-            // invoke method from service.
-            // service is the wrapper object itself if the service is set to be wrapped in the config.
-            if (wrapped && delegate) {
-              // if wrapped and delegate then the method is defined in the delegate object of the wrapper
-              basicResult = method.invoke(((ServiceWrapper) service).delegate, values);
-            } else {
-              // No delegation method can be found in class from the object of service:
-              basicResult = method.invoke(service, values);
-            }
-          } catch (Exception e) {
-            logger.error(operationInvocation + " error: " + e.getMessage());
-          }
-          if (logger.isDebugEnabled()) {
-            logger.debug("Invocation ready. Result is: {}", basicResult);
-          }
-          FileUtil.serializeObject(service, this.getServicePath(clazz, objectId));
-
-        } catch (IOException e) {
-          e.printStackTrace();
-        }
-      }
-    } else { // if this is a call on a created services (this cannot be a constructor)
-      String[] parts = opName.split("::");
-      String objectId = parts[0];
-      Object object = state.get(objectId);
-      methodName = parts[1];
-
-      if (object instanceof ServiceHandle) {
-        object = ((ServiceHandle) object).service;
-      }
-      clazz = object.getClass().getName();
-
-      Method method = this.getMethod(object.getClass(), methodName, types);
-      if (method == null) {
-        // method wasn't found.
-        // maybe this service is wrapped.
-        if (object instanceof ServiceWrapper) {
-          object = ((ServiceWrapper) object).delegate;
-          method = this.getMethod(object.getClass(), methodName, types);
-        }
-      }
-      if (!(object instanceof ServiceWrapper)) {
-        fqOpName = object.getClass().getName() + "::" + methodName;
-      } else {
-        // its a wrapper
-        fqOpName = ((ServiceWrapper) object).delegate.getClass().getName() + "::" + methodName;
-      }
-      /* parse semantic types to the required types */
-      Class<?>[] requiredTypes = method.getParameterTypes();
-      for (int i = 0; i < requiredTypes.length; i++) {
-        if (!requiredTypes[i].isPrimitive() && !requiredTypes[i].getName().equals("String")) {
-          values[i] = this.otms.jsonToObject((JsonNode) values[i], requiredTypes[i]);
-        }
-      }
-
-      /* check argument count and then execute the method */
-      assert (method.getParameterCount() == values.length) : "Required number of parameters: " + method.getParameterCount() + " but " + values.length + " are given.";
-      basicResult = method.invoke(object, values);
-    }
-
-    /* compute the result of the invocation (resolve call-by-reference outputs) */
-    OperationInvocationResult result = new OperationInvocationResult();
-
-    Map<String, String> map = this.classesConfig.getMethodResultMap(clazz, methodName);
-    for (String key : map.keySet()) {
-      String val = map.get(key);
-      if (val.equals("return")) {
-        result.put(key, basicResult);
-      } else if (val.matches("i[\\d]+")) {
-        int inputIndex = Integer.parseInt(val.substring(1));
-        result.put(key, values[inputIndex - 1]);
-      } else {
-        logger.error("Cannot process result map entry {}", val);
-      }
-    }
-
-    /* now update state table based on result mapping */
-    for (String key : result.keySet()) {
-      VariableParam targetParam = outputMapping.get(new VariableParam(key));
-      if (targetParam == null) {
-        throw new IllegalArgumentException("The parameter " + key + " used in the result mapping of " + fqOpName + " is not a declared output parameter of the operation! "
-            + "Declared output params are: " + operationInvocation.getOperation().getOutputParameters());
-      }
-      String nameOfStateVariableToStoreResultIn = targetParam.getName();
-      Object processedResult = result.get(key);
-      Object objectToStore = null;
-      if (processedResult != null) {
-        if (processedResult instanceof Number || processedResult instanceof String) {
-          objectToStore = processedResult;
-        } else {
-          objectToStore = this.otms.objectToJson(processedResult); // TODO do we really need to translate to json again?
-        }
-      }
-      state.put(nameOfStateVariableToStoreResultIn, objectToStore);
-    }
-  }
-
-  /**
-   * Creates the file path for the given classpath and serviceid.
-   * 
-   * @param serviceClasspath
-   *          classpath of the service.
-   * @param serviceId
-   *          id of the service.
-   * @return file path to the service.
-   */
-  private String getServicePath(final String serviceClasspath, final String serviceId) {
-    return folder + File.separator + "objects" + File.separator + serviceClasspath + File.separator + serviceId;
-  }
-
-  private Constructor<?> getConstructor(final Class<?> clazz, final String[] types) {
-    if (!this.classesConfig.classknown(clazz.getName())) {
-      throw new IllegalArgumentException("This server is not configured to create new objects of " + clazz);
-    }
-    for (Constructor<?> constr : clazz.getDeclaredConstructors()) {
-      Class<?> requiredParams[] = constr.getParameterTypes();
-      if (this.matchParameters(requiredParams, types)) {
-        return constr;
-      }
-    }
-    return null;
-  }
-
-  private boolean matchParameters(final Class<?>[] requiredTypes, final String[] providedTypes) {
-    if (requiredTypes.length > providedTypes.length) {
-      return false;
-    }
-    for (int i = 0; i < requiredTypes.length; i++) {
-      if (requiredTypes[i].isPrimitive()) {
-        if (!requiredTypes[i].getName().equals(providedTypes[i])) {
-          return false;
-        }
-      } else {
-        if (!this.otms.isLinkImplemented(providedTypes[i], requiredTypes[i])) {
-          logger.debug("The required type is: ", requiredTypes[i] + " but the provided one has semantic type of " + requiredTypes[i]);
-          return false;
-        }
-      }
-    }
-    return true;
-  }
-
-  private Method getMethod(final Class<?> clazz, final String methodName, final String[] types) {
-    if (!this.classesConfig.methodKnown(clazz.getName(), methodName)) {
-      logger.info("The operation " + clazz.getName() + "::" + methodName + " is not supported by this server.");
-      return null;
-    }
-    for (Method method : clazz.getMethods()) {
-      if (!method.getName().equals(methodName)) {
-        continue;
-      }
-      Class<?> requiredParams[] = method.getParameterTypes();
-      if (this.matchParameters(requiredParams, types)) {
-        return method;
-      } else {
-        logger.debug("Method {} with params {} matches the required method name but is not satisfied by ", methodName, Arrays.toString(requiredParams), Arrays.toString(types));
-      }
-    }
-    return null;
-  }
-
-  public HttpServiceServer(final int port) throws IOException {
-    this(port, "conf/classes.json");
-  }
-
-  /**
-   * Creates the standard test server.
-   */
-  public static HttpServiceServer TEST_SERVER() throws IOException {
-    return new HttpServiceServer(8000, "testrsc/conf/classes.json");
-  }
-
-  public HttpServiceServer(final int port, final String FILE_CONF_CLASSES) throws IOException {
-    /* moved the operation configuration into the classes.json configuration for more flexibility. */
-    // for (String op : FileUtil.readFileAsList(FILE_CONF_OPS)) {
-    // if (op.trim().startsWith("#") || op.trim().isEmpty())
-    // continue;
-    // String[] split = op.split("\t");
-    // String opName = split[0].trim();
-    // supportedOperations.add(opName);
-    // // TODO
-    // /* if an output mapping is given, add it */
-    // if (split.length > 1) {
-    // String map = split[split.length - 1].trim();
-    // if (!map.startsWith("{") || !map.endsWith("}")) {
-    // logger.warn("Result mapping {} for operator is malformed", map, split[0]);
-    // }
-    // resultMaps.put(opName, new HashMap<>());
-    // Map<String, String> resultMap = resultMaps.get(opName);
-    // for (String mapEntry : map.substring(1, map.length() - 1).split(",")) {
-    // String[] kv = mapEntry.split("=");
-    // if (kv.length != 2) {
-    // logger.error("Entry {} in result mapping {} is malformed", mapEntry, map);
-    // } else {
-    // resultMap.put(kv[0].trim(), kv[1].trim());
-    // }
-    // }
-    // }
-    // }
-    this.classesConfig = new ClassesConfiguration(FILE_CONF_CLASSES);
-    this.otms = new OntologicalTypeMarshallingSystem();
-    this.clientForSubSequentCalls = new HttpServiceClient(this.otms);
-    this.server = HttpServer.create(new InetSocketAddress(port), 0);
-    this.server.createContext("/", new JavaClassHandler());
-    this.server.start();
-    logger.info("Server is up ...");
-  }
-
-  public void shutdown() {
-    this.server.stop(0);
-  }
-
-  public static void main(final String[] args) throws Exception {
-    new HttpServiceServer(8000);
-  }
-
-  public ClassesConfiguration getClassesConfig() {
-    return this.classesConfig;
-  }
+	public ClassesConfiguration getClassesConfig() {
+		return classesConfig;
+	}
 }
