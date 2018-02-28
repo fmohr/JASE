@@ -54,6 +54,10 @@ public class MLPipelinePlan {
 		return asPipe;
 	}
 	
+	public void addOptions(MLPipe pipe, String options) {
+		pipe.addOptions(options);
+	}
+	
 
 	public WekaAttributeSelectionPipe addWekaAttributeSelection(ASSearch searcher, ASEvaluation eval) {
 		Objects.requireNonNull(searcher);
@@ -68,7 +72,7 @@ public class MLPipelinePlan {
 		asPipe.withEval(eval.getClass().getName());
 		if(eval instanceof OptionHandler) {
 			String evalOptions[] = ((OptionHandler) eval).getOptions();
-			asPipe.addEvalOptions(evalOptions);
+			asPipe.addOptions(evalOptions);
 		}
 		return asPipe;
 	}
@@ -87,7 +91,7 @@ public class MLPipelinePlan {
 		this.cPipe = new MLPipe(host, classname);
 		if(wekaClassifier instanceof OptionHandler) {
 			String[] options = ((OptionHandler) wekaClassifier).getOptions();
-			cPipe.addEvalOptions(options);
+			cPipe.addOptions(options);
 		}
 		return cPipe;
 	}
@@ -145,7 +149,7 @@ public class MLPipelinePlan {
 		}
 		
 
-		public MLPipe addEvalOptions(String...additionalOptions) {
+		public MLPipe addOptions(String...additionalOptions) {
 			Objects.requireNonNull(additionalOptions);
 			for(String newOption : additionalOptions) {
 				classifierOptions.add(newOption);
