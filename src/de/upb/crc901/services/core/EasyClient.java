@@ -268,7 +268,6 @@ public final class EasyClient {
 	
 	public EasyClient withPositionalArgument(final Object data) {
 		Objects.requireNonNull(data);
-		assureOMTS();
 		JASEDataObject parsedArgument = this.otms.allToSemantic(data, false);
 		this.body.addPositionalArgument(parsedArgument);
 		return this;
@@ -303,7 +302,9 @@ public final class EasyClient {
 	 * caches that help speedup serialization after the otms is used a bunch.
 	 */
 	public EasyClient withOTMS(OntologicalTypeMarshallingSystem otms) {
-		this.otms = otms;
+		if(otms != null) {
+			this.otms = otms;
+		}
 		return this;
 	}
 
@@ -330,8 +331,4 @@ public final class EasyClient {
 		return comp;
 	}
 
-	private void assureOMTS() {
-		if (this.otms == null)
-			otms = new OntologicalTypeMarshallingSystem();
-	}
 }

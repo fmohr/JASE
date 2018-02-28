@@ -27,7 +27,7 @@ public class MLServicePipeline implements Classifier, Serializable {
 
 	private final EnvironmentState servicesContainer = new EnvironmentState();
 	
-	private final transient OntologicalTypeMarshallingSystem otms = new OntologicalTypeMarshallingSystem();
+	private transient OntologicalTypeMarshallingSystem otms = new OntologicalTypeMarshallingSystem();
 	
 	private final List<String> PPFieldNames = new LinkedList<>();
 	
@@ -225,6 +225,11 @@ public class MLServicePipeline implements Classifier, Serializable {
 		return null;
 	}
 	
+	private void readObject(java.io.ObjectInputStream in)
+			throws IOException, ClassNotFoundException {
+	    in.defaultReadObject();
+	    this.otms = new OntologicalTypeMarshallingSystem();
+	}
 	
 	public static void main(final String[] args) throws Throwable {
 		HttpServiceServer server = null;
