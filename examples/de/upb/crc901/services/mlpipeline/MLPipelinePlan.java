@@ -54,8 +54,8 @@ public class MLPipelinePlan {
 		return asPipe;
 	}
 	
-	public void addOptions(MLPipe pipe, String options) {
-		pipe.addOptions(options);
+	public void addOptions(MLPipe pipe, String option, Object value) {
+		pipe.addOptions(option + " " + value.toString());
 	}
 	
 
