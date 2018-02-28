@@ -41,6 +41,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -703,7 +704,12 @@ public class HttpServiceServer {
 		this.classesConfig = new ClassesConfiguration(FILE_CONF_CLASSES);
 		otms = new OntologicalTypeMarshallingSystem();
 		clientForSubSequentCalls = new HttpServiceClient(otms);
-		server = HttpServer.create(new InetSocketAddress(port), 0);
+		server = HttpServer.create(new InetSocketAddress(port), 100);
+		
+
+        // Set an Executor for the multi-threading
+        server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(16));
+        
 		server.createContext("/", new JavaClassHandler());
 		server.start();
 		logger.info("Server is up ...");
