@@ -69,7 +69,6 @@ public class HttpServiceServer {
 	private static File folder = new File("http");
 
 	private final HttpServer server;
-	private final HttpServiceClient clientForSubSequentCalls;
 	private final OntologicalTypeMarshallingSystem otms;
 	private final ClassesConfiguration classesConfig;
 	
@@ -78,7 +77,7 @@ public class HttpServiceServer {
 	 * 	This pattern matches like: "localhost:10/__", "10.12.14.16:100/__" or with no port at all: "10.12.14.16/__"
 	 */
 	private final static String ValidIpAddressRegex = "(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])"; // TODO do we need to support ipv6 address
-	private final static String ValidHostnameRegex = "localhost"; 
+	private final static String ValidHostnameRegex = ".+?"; 
 
 	private final static Pattern containsHostPattern = Pattern.compile(
 																		"^(" 
@@ -728,7 +727,7 @@ public class HttpServiceServer {
 		/* moved the operation configuration into the classes.json configuration for more flexibility.*/
 		this.classesConfig = new ClassesConfiguration(FILE_CONF_CLASSES);
 		otms = new OntologicalTypeMarshallingSystem();
-		clientForSubSequentCalls = new HttpServiceClient(otms);
+		new HttpServiceClient(otms);
 		server = HttpServer.create(new InetSocketAddress(port), 100);
 		
 
