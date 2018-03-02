@@ -313,14 +313,26 @@ public class HttpServiceServer {
 		Operation operation = operationInvocation.getOperation();
 		List<VariableParam> inputs = operation.getInputParameters();
 		
-		List<JASEDataObject> arguments = new ArrayList<>();
+		List<JASEDataObject> arguments = new ArrayList<>(inputs.size());
 		
 		Map<VariableParam, LiteralParam> inputMapping = operationInvocation.getInputMapping();
 		
 		OntologicalTypeMarshallingSystem otms = new OntologicalTypeMarshallingSystem();
+
+		// sort inputs:
+		inputs.sort((varPar1, varPar2) -> {
+			String name1 = varPar1.getName();
+			String name2 = varPar2.getName();
+			Integer pos1 = EnvironmentState.indexFromField(name1);
+			Integer pos2 = EnvironmentState.indexFromField(name2);
+			return pos1.compareTo(pos2);
+		});
 		
+		
+		// extract inputs from envState:
 		for (int j = 0; j < inputs.size(); j++) {
 			JASEDataObject argument = null;
+			
 			String stringValue = inputMapping.get(inputs.get(j)).getName(); 
 			/* stringValue is a string encoded value. 
 			  this value could be a number like: 12 

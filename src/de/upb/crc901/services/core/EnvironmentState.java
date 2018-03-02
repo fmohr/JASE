@@ -175,7 +175,7 @@ public final class EnvironmentState implements Serializable {
 	 * This method contains the functional mapping from indices to fieldnames.
 	 * TODO the offset of 1 between fieldname and fieldindex should be contained in this method.
 	 */
-	private String indexToField(int index) {
+	public static String indexToField(int index) {
 		return "i" + index;
 	}
 
@@ -183,7 +183,7 @@ public final class EnvironmentState implements Serializable {
 	 * This method contains the functional mapping from fieldname to indices.
 	 * TODO the offset of 1 between fieldname and fieldindex should be contained in this method.
 	 */
-	private int indexFromField(String indexField) {
+	public static int indexFromField(String indexField) {
 		if(isIndexField(indexField)) {
 			return Integer.parseInt(indexField.substring(1));
 		}else {
@@ -193,7 +193,7 @@ public final class EnvironmentState implements Serializable {
 	/**
 	 * Checks if the fieldname is a index field.
 	 */
-	public boolean isIndexField(String field) {
+	public static boolean isIndexField(String field) {
 		return field.matches("^i\\d+$");
 	}
 
