@@ -26,12 +26,14 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.Charset;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 
 import de.upb.crc901.configurationsetting.compositiondomain.CompositionDomain;
@@ -86,6 +88,12 @@ public class HttpServiceClient {
 			result.addBody(returnedBody);
 			return result;
 		} else {
+			try (InputStream in = con.getErrorStream()) {
+				String theString = IOUtils.toString(in, Charset.defaultCharset());
+				throw new RuntimeException(theString.replaceAll("\n", "\n\t\t"));
+			}catch(IOException ex) {
+				ex.printStackTrace();
+			}
 			return null; // TODO correct error handling
 		}
 	}

@@ -98,6 +98,7 @@ public class HttpServiceServer {
 
 			String response = "";
 			HttpBody returnBody = null;
+			List<Throwable> exceptions = new ArrayList<>();
 			try {
 
 				/* determine method to be executed */
@@ -269,18 +270,29 @@ public class HttpServiceServer {
 				}
 			} catch (InvocationTargetException e) {
 				e.getTargetException().printStackTrace();
+				exceptions.add(e);
 			} catch (Throwable e) {
 				e.printStackTrace();
+				exceptions.add(e);
 			} finally {
 				OutputStream os;
-				if(returnBody!=null) {
+				if(exceptions.isEmpty()) {
 					t.sendResponseHeaders(200, 0);
 					os = t.getResponseBody();
 					returnBody.writeBody(os);
-				}else {
+				} else {
 					t.sendResponseHeaders(400, 0);
 					os = t.getResponseBody();
-					os.write(response.getBytes());
+					StringBuilder sb = new StringBuilder();
+					
+					for (Throwable e : exceptions) {
+						sb.append((e.getClass().getName() + "\n"));
+						sb.append((e.getMessage() + "\n"));
+						for (StackTraceElement ee : e.getStackTrace()) {
+							sb.append(ee.toString() + "\n");
+						}
+					}
+					os.write(sb.toString().getBytes());
 					os.flush();
 				}
 				os.close();
@@ -669,7 +681,7 @@ public class HttpServiceServer {
 
 	private Method getMethod(Class<?> clazz, String methodName, List<JASEDataObject> providedTypes) {
 		if (!classesConfig.methodKnown(clazz.getName(), methodName)) {
-			logger.info("The operation " + clazz.getName() + "::" + methodName + " is not supported by this server.");
+			logger.warn("The operation " + clazz.getName() + "::" + methodName + " is not supported by this server.");
 			return null;
 		}
 		for (Method method : clazz.getMethods()) {
@@ -685,6 +697,7 @@ public class HttpServiceServer {
 		}
 		return null;
 	}
+	
 	/**
 	 * Returns true if the given text starts with a host name. See 'containsHostPattern'
 	 */
