@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -61,6 +62,7 @@ import de.upb.crc901.configurationsetting.operation.SequentialComposition;
 import jaicore.basic.FileUtil;
 import jaicore.logic.fol.structure.LiteralParam;
 import jaicore.logic.fol.structure.VariableParam;
+import weka.core.expressionlanguage.core.SemanticException;
 
 public class HttpServiceServer {
 
@@ -113,6 +115,34 @@ public class HttpServiceServer {
 				HttpBody body = new HttpBody();
 				body.readfromBody(input);
 				
+				/* start thread that continuous reading the stream until it is closed */
+				Semaphore s = new Semaphore(0);
+				new Thread(new Runnable() {
+					
+					@Override
+					public void run() {
+						long lastAliveMessage = System.currentTimeMillis();
+						boolean canceled = false;
+						byte[] content = new byte[100];
+						while (!canceled) {
+							try {
+								input.read(content);
+								Thread.sleep(1000 * 5);
+							} catch (IOException e) {
+								e.printStackTrace();
+							} catch (InterruptedException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							}
+							if (new String(content).trim().equals("alive")) {
+								lastAliveMessage = System.currentTimeMillis();
+								System.out.println("Server: detected is alive.");
+							}
+						}
+					}
+				}).start();
+				s.acquire();
+					
 				String[] parts = address.split("/", 3);
 				String clazz = parts[0];
 				String objectId = null;

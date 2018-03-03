@@ -8,10 +8,7 @@ import java.net.InetSocketAddress;
 import java.net.URL;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.SynchronousQueue;
 import java.util.stream.Collectors;
-
-import org.junit.runner.notification.StoppedByUserException;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -39,6 +36,7 @@ public class HttpDisconnectTest implements HttpHandler {
 					do {
 
 						/* read bytes from stream */
+						System.out.println("Waiting for next input");
 						byte[] content = new byte[100];
 						result = is.read(content);
 						List<String> lines = Arrays.asList(new String(content).split("\n")).stream().map(l -> l.trim()).filter(l -> !l.isEmpty()).collect(Collectors.toList());
@@ -50,7 +48,7 @@ public class HttpDisconnectTest implements HttpHandler {
 						}
 					} while (result >= 0);
 					try {
-						Thread.sleep(300);
+						Thread.sleep(1000);
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
@@ -148,7 +146,8 @@ public class HttpDisconnectTest implements HttpHandler {
 
 		System.out.println("Ceasing to send listening info.");
 
-		// con.disconnect();
+		out.close();
+		con.disconnect();
 
 		// out.close();
 		// System.out.println("Disconnected; now reading return stream.");
