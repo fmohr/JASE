@@ -69,7 +69,6 @@ public class HttpServiceServer {
 	private static File folder = new File("http");
 
 	private final HttpServer server;
-	private final HttpServiceClient clientForSubSequentCalls;
 	private final OntologicalTypeMarshallingSystem otms;
 	private final ClassesConfiguration classesConfig;
 	
@@ -78,7 +77,7 @@ public class HttpServiceServer {
 	 * 	This pattern matches like: "localhost:10/__", "10.12.14.16:100/__" or with no port at all: "10.12.14.16/__"
 	 */
 	private final static String ValidIpAddressRegex = "(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])"; // TODO do we need to support ipv6 address
-	private final static String ValidHostnameRegex = "localhost"; 
+	private final static String ValidHostnameRegex = ".+?"; 
 
 	private final static Pattern containsHostPattern = Pattern.compile(
 																		"^(" 
@@ -98,6 +97,7 @@ public class HttpServiceServer {
 
 			String response = "";
 			HttpBody returnBody = null;
+			List<Throwable> exceptions = new ArrayList<>();
 			try {
 
 				/* determine method to be executed */
@@ -269,18 +269,29 @@ public class HttpServiceServer {
 				}
 			} catch (InvocationTargetException e) {
 				e.getTargetException().printStackTrace();
+				exceptions.add(e);
 			} catch (Throwable e) {
 				e.printStackTrace();
+				exceptions.add(e);
 			} finally {
 				OutputStream os;
-				if(returnBody!=null) {
+				if(exceptions.isEmpty()) {
 					t.sendResponseHeaders(200, 0);
 					os = t.getResponseBody();
 					returnBody.writeBody(os);
-				}else {
+				} else {
 					t.sendResponseHeaders(400, 0);
 					os = t.getResponseBody();
-					os.write(response.getBytes());
+					StringBuilder sb = new StringBuilder();
+					
+					for (Throwable e : exceptions) {
+						sb.append((e.getClass().getName() + "\n"));
+						sb.append((e.getMessage() + "\n"));
+						for (StackTraceElement ee : e.getStackTrace()) {
+							sb.append(ee.toString() + "\n");
+						}
+					}
+					os.write(sb.toString().getBytes());
 					os.flush();
 				}
 				os.close();
@@ -313,14 +324,26 @@ public class HttpServiceServer {
 		Operation operation = operationInvocation.getOperation();
 		List<VariableParam> inputs = operation.getInputParameters();
 		
-		List<JASEDataObject> arguments = new ArrayList<>();
+		List<JASEDataObject> arguments = new ArrayList<>(inputs.size());
 		
 		Map<VariableParam, LiteralParam> inputMapping = operationInvocation.getInputMapping();
 		
 		OntologicalTypeMarshallingSystem otms = new OntologicalTypeMarshallingSystem();
+
+		// sort inputs:
+		inputs.sort((varPar1, varPar2) -> {
+			String name1 = varPar1.getName();
+			String name2 = varPar2.getName();
+			Integer pos1 = EnvironmentState.indexFromField(name1);
+			Integer pos2 = EnvironmentState.indexFromField(name2);
+			return pos1.compareTo(pos2);
+		});
 		
+		
+		// extract inputs from envState:
 		for (int j = 0; j < inputs.size(); j++) {
 			JASEDataObject argument = null;
+			
 			String stringValue = inputMapping.get(inputs.get(j)).getName(); 
 			/* stringValue is a string encoded value. 
 			  this value could be a number like: 12 
@@ -657,7 +680,7 @@ public class HttpServiceServer {
 
 	private Method getMethod(Class<?> clazz, String methodName, List<JASEDataObject> providedTypes) {
 		if (!classesConfig.methodKnown(clazz.getName(), methodName)) {
-			logger.info("The operation " + clazz.getName() + "::" + methodName + " is not supported by this server.");
+			logger.warn("The operation " + clazz.getName() + "::" + methodName + " is not supported by this server.");
 			return null;
 		}
 		for (Method method : clazz.getMethods()) {
@@ -673,6 +696,7 @@ public class HttpServiceServer {
 		}
 		return null;
 	}
+	
 	/**
 	 * Returns true if the given text starts with a host name. See 'containsHostPattern'
 	 */
@@ -703,7 +727,7 @@ public class HttpServiceServer {
 		/* moved the operation configuration into the classes.json configuration for more flexibility.*/
 		this.classesConfig = new ClassesConfiguration(FILE_CONF_CLASSES);
 		otms = new OntologicalTypeMarshallingSystem();
-		clientForSubSequentCalls = new HttpServiceClient(otms);
+		new HttpServiceClient(otms);
 		server = HttpServer.create(new InetSocketAddress(port), 100);
 		
 

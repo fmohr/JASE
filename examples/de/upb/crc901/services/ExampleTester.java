@@ -68,7 +68,7 @@ import weka.core.Instances;
 
 public class ExampleTester {
 
-	private final static int PORT = 5000;
+	private final static int PORT = 8000;
 
 	private HttpServiceServer server;
 	private SequentialComposition composition;
@@ -140,7 +140,7 @@ public class ExampleTester {
 		
 	}
 
-	@Test
+//	@Test
 	public void testImageProcessor() throws Exception {
 
 		/* create new classifier */
