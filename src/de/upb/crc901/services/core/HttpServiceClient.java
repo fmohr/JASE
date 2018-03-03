@@ -34,6 +34,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -78,13 +79,13 @@ public class HttpServiceClient {
 		OutputStream out = con.getOutputStream();
 		body.writeBody(out);
 		TimeLogger.STOP_TIME("Sending data concluded");
-		out.close();
-		HttpBody returnedBody = new HttpBody();
+		
 		/* read and return answer */
 
 		System.out.println("Waiting for response");
 		Semaphore s = new Semaphore(0);
 		final AtomicInteger responseCode = new AtomicInteger(0);
+		
 		new Thread(new Runnable() {
 
 			@Override
@@ -92,31 +93,57 @@ public class HttpServiceClient {
 				try {
 					responseCode.set(con.getResponseCode());
 					s.release();
-				}
-				catch (SocketException e) {
+				} catch (SocketException e) {
 					if (e.getMessage().equals("Socket Closed")) {
 						System.out.println("Socket has been closed. Finishing thread that waits for response code.");
-					}
-					else
+					} else
 						e.printStackTrace();
-				}
-				catch (IOException e) {
+				} catch (IOException e) {
 					e.printStackTrace();
 				}
 
 			}
 		}).start();
-		
+
+		/* launch thread that communicates that we are still listening */
+		AtomicBoolean alive = new AtomicBoolean(true);
+		new Thread(new Runnable() {
+
+			@Override
+			public void run() {
+				try {
+					while (alive.get()) {
+						synchronized (con) {
+							if (!alive.get())
+								return;
+							out.write("alive".getBytes());
+						}
+						Thread.sleep(1 * 1000);
+					}
+				} catch (IOException e) {
+					e.printStackTrace();
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+		}).start();
+
 		/* wait for response of server. In case of timeout, close connection (and thereby notify server that the process is canceled) */
 		try {
 			s.acquire();
 		} catch (Throwable e) {
-			System.out.println("DISCONNECTING");
-			con.disconnect();
+			synchronized (con) {
+				alive.set(false);
+				System.out.println("DISCONNECTING");
+				con.disconnect();
+			}
 			throw e;
 		}
-
+		
+		/* now process result */
+		alive.set(false);
 		System.out.println("Received response: " + responseCode + ".");
+		HttpBody returnedBody = new HttpBody();
 		if (responseCode.get() == 200) {
 			try (InputStream in = con.getInputStream()) {
 				returnedBody.readfromBody(in);
