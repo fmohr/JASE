@@ -191,6 +191,11 @@ public final class EasyClient {
     return this;
   }
 
+  public EasyClient withRequestID(final String requestID) {
+    this.body.setRequestID(requestID);
+    return this;
+  }
+
   public EasyClient withInputs(final EnvironmentState envState) {
     this.body.getState().extendBy(envState);
     return this;

@@ -59,6 +59,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -77,7 +78,8 @@ public class HttpServiceServer {
   private final OntologicalTypeMarshallingSystem otms;
   private final ClassesConfiguration classesConfig;
 
-  private static final int TIMEOUT_CHECK_INTERVAL_SECONDS = 5;
+  private static final int TIMEOUT_CHECK_INTERVAL_SECONDS = 1;
+  private static AtomicInteger surveillanceThreadCounter = new AtomicInteger(0);
 
   /**
    * containsHostPattern is used to check if a operation contains a host address at the beginning:
@@ -100,7 +102,6 @@ public class HttpServiceServer {
 
     @Override
     public void handle(final HttpExchange t) throws IOException {
-
       String response = "";
       HttpBody returnBody = null;
       List<Throwable> exceptions = new ArrayList<>();
@@ -138,7 +139,13 @@ public class HttpServiceServer {
           }
         }
 
-        System.out.println("Client-ID: " + clientID + " " + Arrays.toString(requestIDSplit));
+        // There has already been a request from the very same client ID with a more recent Request ID =>
+        // The current request got a timeout. Thus, simply return and end the invocation.
+        if (Long.valueOf(requestIDSplit[0]) < Long.valueOf(idInFile[0]) && Integer.valueOf(requestIDSplit[1]) < Integer.valueOf(idInFile[1])) {
+          // XXX console out
+          System.err.println("Simply return and end the invocation as the incoming request was outdated.");
+          return;
+        }
 
         if (Long.valueOf(requestIDSplit[0]) >= Long.valueOf(idInFile[0]) && Integer.valueOf(requestIDSplit[1]) > Integer.valueOf(idInFile[1])) {
           try (BufferedWriter bw = new BufferedWriter(new FileWriter(requestTimeoutHelperFile))) {
@@ -148,20 +155,19 @@ public class HttpServiceServer {
             throw new IllegalStateException("Timeout helper file could not be updated");
           }
         }
-        // there has already been a request with a higher ID => the current request got a timeout
-        // Thus, simply return and end the invocation.
-        else {
-          return;
-        }
 
         /* start thread that continuous reading the stream until it is closed */
         Semaphore s = new Semaphore(0);
         Thread executingThread = Thread.currentThread();
+        AtomicInteger stillRunning = new AtomicInteger(1);
+
         new Thread(new Runnable() {
           @Override
           public void run() {
+            surveillanceThreadCounter.incrementAndGet();
             boolean canceled = false;
-            while (!canceled) {
+            s.release();
+            while (!canceled && stillRunning.get() == 1 && executingThread.isAlive()) {
               try {
                 String[] currentIDSplit = { "-1", "-1" };
                 try (BufferedReader br = new BufferedReader(new FileReader(requestTimeoutHelperFile))) {
@@ -184,164 +190,173 @@ public class HttpServiceServer {
                 e.printStackTrace();
               }
               if (!canceled) {
-                System.out.println("Request still alive.");
+                long runtime = (System.currentTimeMillis() - Long.valueOf(requestIDSplit[0])) / 1000;
+                System.out.println(surveillanceThreadCounter.get() + " active threads. WorkerID: " + executingThread.getId() + " ClientID: " + clientID + " RequestID: " + requestID
+                    + ": Request still alive for " + runtime + "s");
               }
             }
+            surveillanceThreadCounter.decrementAndGet();
           }
         }).start();
-        s.acquire();
 
-        String[] parts = address.split("/", 3);
-        String clazz = parts[0];
-        String objectId = null;
-        if (parts.length > 1) { // address contains objectId. this request will therefore be handled as a service call.
-          objectId = parts[1];
-        } else if (clazz.equals("choreography")) { // choreography call:
-          if (!body.containsComposition()) {
-            response += "objectID and no choreography was given.";
-            throw new RuntimeException(response);
-          }
-          address = body.getOperation(body.getCurrentIndex()).getOperation().getName();
-          parts = address.split("/", 3);
-          clazz = parts[0];
+        try {
+          s.acquire();
+
+          String[] parts = address.split("/", 3);
+          String clazz = parts[0];
+          String objectId = null;
           if (parts.length > 1) { // address contains objectId. this request will therefore be handled as a service call.
             objectId = parts[1];
+          } else if (clazz.equals("choreography")) { // choreography call:
+            if (!body.containsComposition()) {
+              response += "objectID and no choreography was given.";
+              throw new RuntimeException(response);
+            }
+            address = body.getOperation(body.getCurrentIndex()).getOperation().getName();
+            parts = address.split("/", 3);
+            clazz = parts[0];
+            if (parts.length > 1) { // address contains objectId. this request will therefore be handled as a service call.
+              objectId = parts[1];
+            }
+
           }
 
-        }
-        if (body.getComposition() == null && objectId == null) {
-          response += "The address: " + address + " can't be handled by this server.";
-          throw new RuntimeException(response);
-        }
-
-        // Map<String, JASEDataObject> initialState = new HashMap<>(body.getKeyworkArgs());
-        // Map<String, JASEDataObject> state = new HashMap<>(initialState);
-        EnvironmentState envState = body.getState();
-        envState.resetStartingField();
-        logger.info("Input keys are: {}", StreamSupport.stream(envState.startingFieldNames().spliterator(), false).collect(Collectors.joining(", ")));
-
-        /*
-         * analyze choreography in order to see what we actually will execute right away: 1. move to
-         * position of current call; 2. compute all subsequent calls on same host and on services spawend
-         * from here.
-         *
-         */
-        SequentialCompositionCollection comp = null;
-        SequentialComposition subsequenceComp = new SequentialComposition(new CompositionDomain());
-        OperationInvocation invocationToMakeFromHere = null;
-        if (body.containsComposition()) {
-          comp = body.parseSequentialComposition();
-          Iterator<OperationInvocation> it = comp.iterator();
-          Collection<String> servicesInExecEnvironment = new HashSet<>();
-          for (String field : body.getState().serviceHandleFieldNames()) {
-            if (!((ServiceHandle) body.getState().retrieveField(field).getData()).isRemote()) {
-              servicesInExecEnvironment.add(field);
-            }
+          if (body.getComposition() == null && objectId == null) {
+            response += "The address: " + address + " can't be handled by this server.";
+            throw new RuntimeException(response);
           }
-          for (int i = 0; it.hasNext(); i++) {
-            OperationInvocation opInv = it.next();
-            if (body.isBelowExecutionBound(i)) {
-              continue; // ignore indexes before the current one
+
+          // Map<String, JASEDataObject> initialState = new HashMap<>(body.getKeyworkArgs());
+          // Map<String, JASEDataObject> state = new HashMap<>(initialState);
+          EnvironmentState envState = body.getState();
+          envState.resetStartingField();
+          logger.info("Input keys are: {}", StreamSupport.stream(envState.startingFieldNames().spliterator(), false).collect(Collectors.joining(", ")));
+
+          /*
+           * analyze choreography in order to see what we actually will execute right away: 1. move to
+           * position of current call; 2. compute all subsequent calls on same host and on services spawend
+           * from here.
+           *
+           */
+          SequentialCompositionCollection comp = null;
+          SequentialComposition subsequenceComp = new SequentialComposition(new CompositionDomain());
+          OperationInvocation invocationToMakeFromHere = null;
+          if (body.containsComposition()) {
+            comp = body.parseSequentialComposition();
+            Iterator<OperationInvocation> it = comp.iterator();
+            Collection<String> servicesInExecEnvironment = new HashSet<>();
+            for (String field : body.getState().serviceHandleFieldNames()) {
+              if (!((ServiceHandle) body.getState().retrieveField(field).getData()).isRemote()) {
+                servicesInExecEnvironment.add(field);
+              }
             }
-            if (body.isAboveExecutionBound(i)) {
-              break; // ignore operations above maxindex.
-            }
-            invocationToMakeFromHere = opInv;
-            String opName = opInv.getOperation().getName();
-            if (opName.contains("/")) {
-              String host = opName.substring(0, opName.indexOf("/"));
-              String myAddress = t.getLocalAddress().toString().substring(1);
-              // if (!host.equals(myAddress)) {
-              // break;
-              // }
-              if (!HttpServiceServer.this.canExecute(opInv)) { // if this server can't execute this operation exit the loop here. invocationToMakeFromHere will
-                                                               // then contain the address of the next invocation.
-                // throw new RuntimeException("Can't execute this service: " + opInv.toString());
+            for (int i = 0; it.hasNext(); i++) {
+              OperationInvocation opInv = it.next();
+              if (body.isBelowExecutionBound(i)) {
+                continue; // ignore indexes before the current one
+              }
+              if (body.isAboveExecutionBound(i)) {
+                break; // ignore operations above maxindex.
+              }
+              invocationToMakeFromHere = opInv;
+              String opName = opInv.getOperation().getName();
+              if (opName.contains("/")) {
+                String host = opName.substring(0, opName.indexOf("/"));
+                String myAddress = t.getLocalAddress().toString().substring(1);
+                // if (!host.equals(myAddress)) {
+                // break;
+                // }
+                if (!HttpServiceServer.this.canExecute(opInv)) { // if this server can't execute this operation exit the loop here. invocationToMakeFromHere will
+                                                                 // then contain the address of the next invocation.
+                  // throw new RuntimeException("Can't execute this service: " + opInv.toString());
+                  break;
+                }
+                /* if this is a constructor, also add the created instance to the locally available services */
+                servicesInExecEnvironment.add(opName);
+                if (opName.contains("__construct")) {
+                  servicesInExecEnvironment.add(opInv.getOutputMapping().values().iterator().next().getName());
+                }
+              } else if (!servicesInExecEnvironment.contains(opName.substring(0, opName.indexOf("::")))) {
                 break;
               }
-              /* if this is a constructor, also add the created instance to the locally available services */
-              servicesInExecEnvironment.add(opName);
-              if (opName.contains("__construct")) {
-                servicesInExecEnvironment.add(opInv.getOutputMapping().values().iterator().next().getName());
-              }
-            } else if (!servicesInExecEnvironment.contains(opName.substring(0, opName.indexOf("::")))) {
-              break;
+              subsequenceComp.addOperationInvocation(opInv);
+              invocationToMakeFromHere = null;
             }
-            subsequenceComp.addOperationInvocation(opInv);
-            invocationToMakeFromHere = null;
-          }
-        } else {
-          OperationInvocation opinv;
-          if (objectId.equals("__construct")) {
-
-            /* creating new object */
-            opinv = ServiceUtil.getOperationInvocation(t.getLocalAddress().toString().substring(1) + "/" + clazz + "::__construct", envState.getCurrentMap());
-
           } else {
-            opinv = ServiceUtil.getOperationInvocation(t.getLocalAddress().toString().substring(1) + "/" + clazz + "/" + objectId + "::" + parts[2], envState.getCurrentMap());
+            OperationInvocation opinv;
+            if (objectId.equals("__construct")) {
+
+              /* creating new object */
+              opinv = ServiceUtil.getOperationInvocation(t.getLocalAddress().toString().substring(1) + "/" + clazz + "::__construct", envState.getCurrentMap());
+
+            } else {
+              opinv = ServiceUtil.getOperationInvocation(t.getLocalAddress().toString().substring(1) + "/" + clazz + "/" + objectId + "::" + parts[2], envState.getCurrentMap());
+            }
+            subsequenceComp.addOperationInvocation(opinv);
           }
-          subsequenceComp.addOperationInvocation(opinv);
-        }
 
-        /* execute the whole induced composition */
+          /* execute the whole induced composition */
 
-        int currentIndex = body.getCurrentIndex();
-        for (OperationInvocation opInv : subsequenceComp) {
-          HttpServiceServer.this.invokeOperation(opInv, envState);
-          currentIndex++;
-        }
-        logger.info("Finished local execution. Now invoking {}", invocationToMakeFromHere);
+          int currentIndex = body.getCurrentIndex();
+          for (OperationInvocation opInv : subsequenceComp) {
+            HttpServiceServer.this.invokeOperation(opInv, envState);
+            currentIndex++;
+          }
+          logger.info("Finished local execution. Now invoking {}", invocationToMakeFromHere);
 
-        /* forward next service */
-        if (invocationToMakeFromHere != null) {
+          /* forward next service */
+          if (invocationToMakeFromHere != null) {
 
-          /* extract vars from state that are in json (ordinary data but not service references) */
-          OperationPieces pieces = new OperationPieces(invocationToMakeFromHere.getOperation().getName());
-          ServiceCompositionResult result;
+            /* extract vars from state that are in json (ordinary data but not service references) */
+            OperationPieces pieces = new OperationPieces(invocationToMakeFromHere.getOperation().getName());
+            ServiceCompositionResult result;
 
-          // create a shallow copy of the state we have:
-          EnvironmentState forwardInputs = new EnvironmentState(); // forwarded to the other server
-          for (String fieldName : envState.currentFieldNames()) {
-            JASEDataObject field = envState.retrieveField(fieldName);
-            if (field.isofType("ServiceHandle")) {
-              ServiceHandle sh = (ServiceHandle) field.getData();
-              if (sh.isRemote()) { // only forward remote services
+            // create a shallow copy of the state we have:
+            EnvironmentState forwardInputs = new EnvironmentState(); // forwarded to the other server
+            for (String fieldName : envState.currentFieldNames()) {
+              JASEDataObject field = envState.retrieveField(fieldName);
+              if (field.isofType("ServiceHandle")) {
+                ServiceHandle sh = (ServiceHandle) field.getData();
+                if (sh.isRemote()) { // only forward remote services
+                  forwardInputs.addField(fieldName, field);
+                }
+              } else {
+                // TODO what do we need to forward?
                 forwardInputs.addField(fieldName, field);
               }
+            }
+
+            HttpBody forwardBody = new HttpBody(forwardInputs, body.getComposition(), currentIndex, -1, body.getClientID());
+
+            if (pieces.hasHost()) {
+              result = new EasyClient().withBody(forwardBody).withHost(pieces.getHost()).dispatch();
+            } else if (envState.containsField(pieces.getId())) {
+
+              if (!(envState.retrieveField(pieces.getId()).getData() instanceof ServiceHandle)) {
+                throw new RuntimeException("The refered object " + pieces.getId() + " was of type " + envState.retrieveField(pieces.getId()).getType());
+              }
+              ServiceHandle handler = (ServiceHandle) envState.retrieveField(pieces.getId()).getData();
+              result = new EasyClient().withBody(forwardBody).withService(handler).dispatch();
             } else {
-              // TODO what do we need to forward?
-              forwardInputs.addField(fieldName, field);
+              throw new RuntimeException("Can't forward the rest of the message.");
             }
+            envState.extendBy(result);
+            response += result.toString();
+            logger.info("Received answer from subsequent service.");
           }
 
-          HttpBody forwardBody = new HttpBody(forwardInputs, body.getComposition(), currentIndex, -1, body.getClientID());
-
-          if (pieces.hasHost()) {
-            result = new EasyClient().withBody(forwardBody).withHost(pieces.getHost()).dispatch();
-          } else if (envState.containsField(pieces.getId())) {
-
-            if (!(envState.retrieveField(pieces.getId()).getData() instanceof ServiceHandle)) {
-              throw new RuntimeException("The refered object " + pieces.getId() + " was of type " + envState.retrieveField(pieces.getId()).getType());
+          /* now returning the serializations of all created (non-service) objects */
+          logger.info("Returning answer to sender");
+          returnBody = new HttpBody();
+          for (String key : envState.addedFieldNames()) {
+            JASEDataObject answerObject = envState.retrieveField(key);
+            if (answerObject == null) {
+              continue;
             }
-            ServiceHandle handler = (ServiceHandle) envState.retrieveField(pieces.getId()).getData();
-            result = new EasyClient().withBody(forwardBody).withService(handler).dispatch();
-          } else {
-            throw new RuntimeException("Can't forward the rest of the message.");
+            returnBody.addKeyworkArgument(key, answerObject);
           }
-          envState.extendBy(result);
-          response += result.toString();
-          logger.info("Received answer from subsequent service.");
-        }
-
-        /* now returning the serializations of all created (non-service) objects */
-        logger.info("Returning answer to sender");
-        returnBody = new HttpBody();
-        for (String key : envState.addedFieldNames()) {
-          JASEDataObject answerObject = envState.retrieveField(key);
-          if (answerObject == null) {
-            continue;
-          }
-          returnBody.addKeyworkArgument(key, answerObject);
+        } finally {
+          stillRunning.set(0);
         }
       } catch (InvocationTargetException e) {
         e.getTargetException().printStackTrace();
