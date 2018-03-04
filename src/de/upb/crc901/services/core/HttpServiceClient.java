@@ -94,7 +94,7 @@ public class HttpServiceClient {
 			}catch(IOException ex) {
 				ex.printStackTrace();
 			}
-			return null; // TODO correct error handling
+			return null;
 		}
 	}
 	
@@ -116,20 +116,23 @@ public class HttpServiceClient {
 			
 		}
 	}
-
+	@Deprecated
 	public ServiceCompositionResult callServiceOperation(String serviceCall, Object... inputs) throws IOException {
 		return callServiceOperation(ServiceUtil.getOperationInvocation(serviceCall, inputs), new SequentialComposition(new CompositionDomain()), inputs);
 	}
 
+	@Deprecated
 	public ServiceCompositionResult callServiceOperation(OperationInvocation call, SequentialComposition coreography) throws IOException {
 		return callServiceOperation(call, coreography, new HashMap<>());
 	}
 
+	@Deprecated
 	public ServiceCompositionResult callServiceOperation(OperationInvocation call, SequentialComposition coreography, Object... additionalInputs) throws IOException {
 		
 		return callServiceOperation(call, coreography, ServiceUtil.getObjectInputMap(additionalInputs));
 	}
 
+	@Deprecated
 	public ServiceCompositionResult callServiceOperation(OperationInvocation call, SequentialComposition coreography, Map<String, Object> additionalInputs) throws IOException {
 		
 		/* prepare data */
@@ -197,6 +200,7 @@ public class HttpServiceClient {
 	}
 	
 
+	@Deprecated
 	public ServiceCompositionResult invokeServiceComposition(SequentialComposition composition, Map<String, Object> inputs) throws IOException {
 
 		/* check first that all inputs are given */
@@ -216,6 +220,7 @@ public class HttpServiceClient {
 		return callServiceOperation(first, composition, inputs);
 	}
 
+	@Deprecated
 	public ServiceCompositionResult invokeServiceComposition(SequentialComposition composition, Object... additionalInputs) throws IOException {
 		return invokeServiceComposition(composition, ServiceUtil.getObjectInputMap(additionalInputs));
 	}

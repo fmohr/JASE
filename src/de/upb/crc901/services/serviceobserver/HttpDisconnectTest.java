@@ -1,4 +1,4 @@
-package de.upb.crc901.services;
+package de.upb.crc901.services.serviceobserver;
 
 import java.io.IOException;
 import java.io.InputStream;
