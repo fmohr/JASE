@@ -19,8 +19,8 @@ public final class ServiceHandle implements Serializable {
   private final String host;
   private final String classpath;
   private final String id;
+  private String clientID;
   private final transient Object service;
-
 
   /**
    * Standard constructor
@@ -36,6 +36,11 @@ public final class ServiceHandle implements Serializable {
     this.classpath = Objects.requireNonNull(classpath);
     this.id = Objects.requireNonNull(id);
     this.service = service;
+  }
+
+  public ServiceHandle(final String host, final String classpath, final String id, final Object service, final String clientID) {
+    this(host, classpath, id, service);
+    this.clientID = clientID;
   }
 
   /**
@@ -82,7 +87,6 @@ public final class ServiceHandle implements Serializable {
   public String getHost() {
     return this.host;
   }
-
 
   public String getClasspath() {
     return this.classpath;
@@ -150,6 +154,12 @@ public final class ServiceHandle implements Serializable {
     return new ServiceHandle(this.getHost(), this.getClasspath(), id2, this.getService());
   }
 
+  public ServiceHandle withClientID(final String clientID) {
+    Objects.requireNonNull(clientID);
+    this.clientID = clientID;
+    return this;
+  }
+
   /**
    * Returns a copy of this object with empty id.
    */
@@ -157,7 +167,8 @@ public final class ServiceHandle implements Serializable {
     return new ServiceHandle(this.getHost(), this.getClasspath(), not_serialized_id, this.getService());
   }
 
-	public boolean containService() {
+  public boolean containService() {
     return service_placeholder != this.getService();
   }
+
 }
