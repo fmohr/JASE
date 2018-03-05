@@ -82,7 +82,13 @@ public class HttpServiceObserver implements HttpHandler {
 			 }
 			 Long activeRequestTime = activeRequests.get(clientId);
 			 if(activeRequestTime < requestTime) {
-				 cancelTasks(clientId);
+//				 cancelTasks(clientId);
+				 if(pythonPIds.get(clientId) != null) {
+					 pythonPIds.put(clientId, null);
+				 }
+				 if(javaThreads.get(clientId) != null) {
+					 javaThreads.put(clientId, null);
+				 }
 				 activeRequests.put(clientId, requestTime);
 			 }
 			 
@@ -102,7 +108,7 @@ public class HttpServiceObserver implements HttpHandler {
 				 javaThreads.get(clientId).add(javaServerThread);
 				 
 			 } else if(messageFlag.equals(Python_Worker_Started)) {
-				 long pythonPId = Long.parseLong(matcher.group(3));
+				 long pythonPId = Long.parseLong(matcher.group(4));
 				 if(pythonPIds.get(clientId) == null) {
 					 List<Long> pythonProcesses = new LinkedList<>();
 					 pythonPIds.put(clientId, pythonProcesses);
@@ -129,6 +135,7 @@ public class HttpServiceObserver implements HttpHandler {
 				// kill python prrocess
 				try {
 					Runtime.getRuntime().exec("kill -9 " + pythonPId);
+					System.out.println("killed python process: "  + pythonPId);
 				} catch (Exception e) {
 					e.printStackTrace();
 					logger.error("Can't kill python process: {} ", pythonPId);

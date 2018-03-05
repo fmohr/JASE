@@ -83,7 +83,7 @@ public class HttpServiceClient {
 		/* read and return answer */
 		
 		
-		System.out.println("Waiting for response");
+//		System.out.println("Waiting for response");
 		Semaphore s = new Semaphore(0);
 		final AtomicInteger responseCode = new AtomicInteger(0);
 		Thread waitsForAnswerThread = new Thread(new Runnable() {
@@ -92,6 +92,7 @@ public class HttpServiceClient {
 			public void run() {
 				try {
 					responseCode.set(con.getResponseCode());
+					s.release();
 				}
 				catch (SocketException e) {
 					if (e.getMessage().equalsIgnoreCase("Socket closed")) {
@@ -103,7 +104,6 @@ public class HttpServiceClient {
 				catch (IOException e) {
 					e.printStackTrace();
 				} finally {
-					s.release();
 				}
 
 			}
