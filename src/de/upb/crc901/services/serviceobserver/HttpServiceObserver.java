@@ -117,7 +117,8 @@ public class HttpServiceObserver implements HttpHandler {
 		if(javaThreads.containsKey(clientId)) {
 			for(Thread javaServerThread : javaThreads.get(clientId)) {
 				if(javaServerThread.isAlive()) {
-					javaServerThread.stop(); // i don't like using this method. but there doesn't seem to be a better solution now.
+					System.out.println("Interrupting " + javaServerThread);
+					javaServerThread.interrupt();
 			
 				}
 			}

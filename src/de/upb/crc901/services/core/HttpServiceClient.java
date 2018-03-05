@@ -94,7 +94,7 @@ public class HttpServiceClient {
 					responseCode.set(con.getResponseCode());
 				}
 				catch (SocketException e) {
-					if (e.getMessage().equals("Socket Closed")) {
+					if (e.getMessage().equalsIgnoreCase("Socket closed")) {
 						System.out.println("Socket has been closed. Finishing thread that waits for response code.");
 					}
 					else
