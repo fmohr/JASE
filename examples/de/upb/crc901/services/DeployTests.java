@@ -162,8 +162,8 @@ public class DeployTests {
 			} 
 	  });
 	  clientThread.start();
-	  Thread.sleep(100);
-	  clientThread.interrupt();
+	  Thread.sleep(2000);
+	  clientThread.stop();
 	  clientThread.join();
   }
 

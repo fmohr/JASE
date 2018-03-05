@@ -156,6 +156,7 @@ public class HttpServiceClient {
 		con.setRequestMethod("POST");
 		con.setDoOutput(true);
 		byte[] message = (HttpServiceObserver.Cancel_Request + ":" + Thread.currentThread().getId()).getBytes( StandardCharsets.UTF_8 );
+		con.setFixedLengthStreamingMode(message.length);
 		try( DataOutputStream wr = new DataOutputStream( con.getOutputStream())) {
 			   wr.write( message );
 		}
