@@ -144,6 +144,28 @@ public class DeployTests {
     ServiceCompositionResult result = this.executeComposition("testrsc/nn_sk.txt", split.get(0), split.get(1), split.get(2));
     System.out.println("Prediction accuracy MLP SK: " + result.get("Accuracy").getData());
   }
+   
+  @Test
+  public void timeoutTest() throws IOException, InterruptedException {
+	  List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .8f, .14f, 0.05f);
+	  // test java interrupt
+	  Thread clientThread = new Thread( () -> {
+		  	try {
+				this.executeComposition("testrsc/nn_weka.txt", split.get(0), split.get(1), split.get(2));
+			} catch (Exception e) {
+				e.printStackTrace();
+			} 
+			try {
+				this.executeComposition("testrsc/nn_weka.txt", split.get(0), split.get(1), split.get(2));
+			} catch (Exception e) {
+				e.printStackTrace();
+			} 
+	  });
+	  clientThread.start();
+	  Thread.sleep(100);
+	  clientThread.interrupt();
+	  clientThread.join();
+  }
 
   private ServiceCompositionResult executeComposition(final String filePath, final Object... inputs) throws IOException {
     /* load composition */
@@ -155,6 +177,8 @@ public class DeployTests {
     /* return the result */
     return result;
   }
+  
+  
 
 //  @Test
   public void test_runtime_weka() throws Exception {

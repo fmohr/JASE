@@ -21,25 +21,33 @@
  */
 package de.upb.crc901.services.core;
 
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.SocketException;
 import java.net.URL;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 
+import com.fasterxml.jackson.core.io.DataOutputAsStream;
+
 import de.upb.crc901.configurationsetting.compositiondomain.CompositionDomain;
 import de.upb.crc901.configurationsetting.operation.OperationInvocation;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
 import de.upb.crc901.configurationsetting.serialization.SequentialCompositionSerializer;
+import de.upb.crc901.services.serviceobserver.HttpServiceObserver;
 import jaicore.logic.fol.structure.LiteralParam;
 
 public class HttpServiceClient {
@@ -73,8 +81,49 @@ public class HttpServiceClient {
 		out.close();
 		HttpBody returnedBody = new HttpBody();
 		/* read and return answer */
-		int responseCode = con.getResponseCode();
-		if(responseCode == 200) {
+		
+		
+		System.out.println("Waiting for response");
+		Semaphore s = new Semaphore(0);
+		final AtomicInteger responseCode = new AtomicInteger(0);
+		Thread waitsForAnswerThread = new Thread(new Runnable() {
+
+			@Override
+			public void run() {
+				try {
+					responseCode.set(con.getResponseCode());
+				}
+				catch (SocketException e) {
+					if (e.getMessage().equals("Socket Closed")) {
+						System.out.println("Socket has been closed. Finishing thread that waits for response code.");
+					}
+					else
+						e.printStackTrace();
+				}
+				catch (IOException e) {
+					e.printStackTrace();
+				} finally {
+					s.release();
+				}
+
+			}
+		});
+		waitsForAnswerThread.setDaemon(true);
+		waitsForAnswerThread.start();
+		
+		/* wait for response of server. In case of timeout, close connection (and thereby notify server that the process is canceled) */
+		try {
+			s.acquire();
+		} catch (Throwable e) {
+			System.out.println("DISCONNECTING");
+			sendCancelRequest(host);
+			con.disconnect();
+			throw new RuntimeException(e);
+		}
+
+		
+		
+		if(responseCode.get() == 200) {
 			try (InputStream in = con.getInputStream()){
 				returnedBody.readfromBody(in);
 			}catch(IOException ex) {
@@ -92,9 +141,23 @@ public class HttpServiceClient {
 				String theString = IOUtils.toString(in, Charset.defaultCharset());
 				throw new RuntimeException(theString.replaceAll("\n", "\n\t\t"));
 			}catch(IOException ex) {
-				ex.printStackTrace();
+				throw ex;
 			}
-			return null;
+		}
+	}
+	
+	private void sendCancelRequest(String host) throws IOException {
+		host = host.substring(0, host.indexOf(':')) + ":" + 9090;
+		URL url = new URL("http://" + host + "/");
+		
+		
+		HttpURLConnection con = (HttpURLConnection) url.openConnection();
+		con.setConnectTimeout(500);
+		con.setRequestMethod("POST");
+		con.setDoOutput(true);
+		byte[] message = (HttpServiceObserver.Cancel_Request + ":" + Thread.currentThread().getId()).getBytes( StandardCharsets.UTF_8 );
+		try( DataOutputStream wr = new DataOutputStream( con.getOutputStream())) {
+			   wr.write( message );
 		}
 	}
 	

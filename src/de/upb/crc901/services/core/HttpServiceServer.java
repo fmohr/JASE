@@ -58,6 +58,7 @@ import de.upb.crc901.configurationsetting.compositiondomain.CompositionDomain;
 import de.upb.crc901.configurationsetting.operation.Operation;
 import de.upb.crc901.configurationsetting.operation.OperationInvocation;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
+import de.upb.crc901.services.serviceobserver.HttpServiceObserver;
 import jaicore.basic.FileUtil;
 import jaicore.logic.fol.structure.LiteralParam;
 import jaicore.logic.fol.structure.VariableParam;
@@ -113,6 +114,9 @@ public class HttpServiceServer {
 				HttpBody body = new HttpBody();
 				body.readfromBody(input);
 				
+        		
+				HttpServiceObserver.javaServerRequestNotice(body.getRequestId());
+				
 				String[] parts = address.split("/", 3);
 				String clazz = parts[0];
 				String objectId = null;
@@ -141,8 +145,8 @@ public class HttpServiceServer {
 //				Map<String, JASEDataObject> state = new HashMap<>(initialState);
 				EnvironmentState envState = body.getState();
 				envState.resetStartingField();
-				logger.info("Input keys are: {}", 
-						StreamSupport.stream(envState.startingFieldNames().spliterator(), false).collect(Collectors.joining(", ")));
+				//logger.info("Input keys are: {}", 
+			//			StreamSupport.stream(envState.startingFieldNames().spliterator(), false).collect(Collectors.joining(", ")));
 
 				/*
 				 * analyze choreography in order to see what we actually will execute right away: 1. move to position of current call; 2. compute all subsequent calls on same host and on services
@@ -237,6 +241,9 @@ public class HttpServiceServer {
 					}
 					
 					HttpBody forwardBody = new HttpBody(forwardInputs, body.getComposition(), currentIndex, -1);
+					
+					// use the initial request id
+					forwardBody.setRequestId(body.getRequestId());
 					
 					if(pieces.hasHost()) {
 						result = new EasyClient().withBody(forwardBody).withHost(pieces.getHost()).dispatch();
@@ -732,15 +739,22 @@ public class HttpServiceServer {
 		
 
         // Set an Executor for the multi-threading
-        server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(16));
+        server.setExecutor(task -> {
+        		// a new thread for each request:
+        		Thread handlerThread = new Thread(task);
+        		handlerThread.start();
+        });
         
 		server.createContext("/", new JavaClassHandler());
 		server.start();
 		logger.info("Server is up ...");
+		
+		HttpServiceObserver.StartServer();
 	}
 	
 	public void shutdown() {
 		server.stop(0);
+		HttpServiceObserver.CloseServer();
 	}
 
 	public static void main(String[] args) throws Exception {

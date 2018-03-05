@@ -30,8 +30,8 @@ public class HttpServiceObserver implements HttpHandler {
 													+ Cancel_Request + "|"
 													+ Java_Worker_Started + "|"
 													+ Python_Worker_Started + ""
-													+ "):(\\d+) " // client id
-													+ "(?:_(\\d+))? " // request time millisec
+													+ "):(\\d+)" // client id
+													+ "(?:_(\\d+))?" // request time millisec
 													+ "(?:_(\\d+))?$"	 // python process id
 															);
 	
@@ -45,8 +45,14 @@ public class HttpServiceObserver implements HttpHandler {
 	@Override
 	public void handle(HttpExchange t) throws IOException {
 		String message = IOUtils.toString(t.getRequestBody(), Charset.defaultCharset());
-		notice(message, null);
 		logger.debug("Observer recevied a new message: {}", message);
+		try {
+			notice(message, null);
+		} catch(Exception ex) {
+			ex.printStackTrace();
+		}
+		t.sendResponseHeaders(200,0);
+		t.getResponseBody().close();
 	}
 	
 	public static synchronized void javaServerRequestNotice(String requestId) throws IOException {
@@ -54,13 +60,14 @@ public class HttpServiceObserver implements HttpHandler {
 	}
 	
 	public static synchronized void notice(String message, Thread javaServerThread) throws IOException {
-		 Matcher matcher =messageRegex.matcher(message);
-		 if(matcher.matches()) {
+		System.out.println("Observer received message: " + message); 
+		Matcher matcher =messageRegex.matcher(message);
+		 if(!matcher.matches()) {
 			 logger.error("The message={} has a wrong syntax");
 			 return;
 		 }
-		 String messageFlag = matcher.group(0);
-		 long clientId = Long.parseLong(matcher.group(1));
+		 String messageFlag = matcher.group(1);
+		 long clientId = Long.parseLong(matcher.group(2));
 		 
 		 if(messageFlag.equals(Cancel_Request)) {
 			 // cancels java processes and threads that are running this task.
@@ -68,7 +75,7 @@ public class HttpServiceObserver implements HttpHandler {
 			 
 		 } else {
 
-			 long requestTime = Long.parseLong(matcher.group(2));
+			 long requestTime = Long.parseLong(matcher.group(3));
 			 if(!activeRequests.containsKey(clientId)) {
 				 // client has not made a request before
 				 activeRequests.put(clientId, requestTime);
@@ -109,7 +116,10 @@ public class HttpServiceObserver implements HttpHandler {
 	private static void cancelTasks(Long clientId) throws IOException {
 		if(javaThreads.containsKey(clientId)) {
 			for(Thread javaServerThread : javaThreads.get(clientId)) {
-				javaServerThread.stop(); // i don't like using this method. but there doesn't seem to be a better solution now.
+				if(javaServerThread.isAlive()) {
+					javaServerThread.stop(); // i don't like using this method. but there doesn't seem to be a better solution now.
+			
+				}
 			}
 			javaThreads.remove(clientId);
 		}
@@ -128,17 +138,15 @@ public class HttpServiceObserver implements HttpHandler {
 	}
 	
 	static HttpServer server;
-	static void StartServer() throws IOException {
-		server = HttpServer.create(new InetSocketAddress(9090), 0);
-		
-
-        
-		server.createContext("/", new HttpDisconnectTest());
+	public static void StartServer() throws IOException {
+		server = HttpServer.create(new InetSocketAddress(9090), 1000);
+		server.createContext("/", new HttpServiceObserver());
 		server.start();
 		System.out.println("Server is up ...");
 	}
-	static void CloseServer() {
-		System.exit(0);
+	public static void CloseServer() {
+		server.stop(0);
 	}
+
 	
 }
