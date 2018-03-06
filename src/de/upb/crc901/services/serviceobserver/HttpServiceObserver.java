@@ -60,7 +60,7 @@ public class HttpServiceObserver implements HttpHandler {
 	}
 	
 	public static synchronized void notice(String message, Thread javaServerThread) throws IOException {
-		System.out.println("Observer received message: " + message); 
+		logger.info("Observer received message: {}", message); 
 		Matcher matcher =messageRegex.matcher(message);
 		 if(!matcher.matches()) {
 			 logger.error("The message={} has a wrong syntax");
@@ -146,8 +146,8 @@ public class HttpServiceObserver implements HttpHandler {
 	}
 	
 	static HttpServer server;
-	public static void StartServer() throws IOException {
-		server = HttpServer.create(new InetSocketAddress(9090), 1000);
+	public static void StartServer(int port) throws IOException {
+		server = HttpServer.create(new InetSocketAddress(port), 1000);
 		server.createContext("/", new HttpServiceObserver());
 		server.start();
 		System.out.println("Server is up ...");

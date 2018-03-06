@@ -27,6 +27,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -51,6 +52,8 @@ import de.upb.crc901.services.serviceobserver.HttpServiceObserver;
 import jaicore.logic.fol.structure.LiteralParam;
 
 public class HttpServiceClient {
+	
+	public static String hostForCancelation;
 
 	private final OntologicalTypeMarshallingSystem otms;
 
@@ -74,6 +77,7 @@ public class HttpServiceClient {
 		con.setRequestMethod("POST");
 		con.setDoOutput(true);
 		TimeLogger.STOP_TIME("Sending data started");
+		
 		/* send data */
 		OutputStream out = con.getOutputStream();
 		body.writeBody(out);
@@ -81,7 +85,6 @@ public class HttpServiceClient {
 		out.close();
 		HttpBody returnedBody = new HttpBody();
 		/* read and return answer */
-		
 		
 //		System.out.println("Waiting for response");
 		Semaphore s = new Semaphore(0);
@@ -116,7 +119,7 @@ public class HttpServiceClient {
 			s.acquire();
 		} catch (Throwable e) {
 			System.out.println("DISCONNECTING");
-			sendCancelRequest(host);
+			sendCancelRequest();
 			con.disconnect();
 			throw new RuntimeException(e);
 		}
@@ -146,19 +149,21 @@ public class HttpServiceClient {
 		}
 	}
 	
-	private void sendCancelRequest(String host) throws IOException {
-		host = host.substring(0, host.indexOf(':')) + ":" + 9090;
-		URL url = new URL("http://" + host + "/");
+	private void sendCancelRequest() throws IOException {
+		URL url = new URL("http://" + hostForCancelation + "/");
 		
 		
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
-		con.setConnectTimeout(500);
+		con.setConnectTimeout(1000);
 		con.setRequestMethod("POST");
 		con.setDoOutput(true);
 		byte[] message = (HttpServiceObserver.Cancel_Request + ":" + Thread.currentThread().getId()).getBytes( StandardCharsets.UTF_8 );
 		con.setFixedLengthStreamingMode(message.length);
 		try( DataOutputStream wr = new DataOutputStream( con.getOutputStream())) {
 			   wr.write( message );
+		}
+		catch (SocketTimeoutException e) {
+			System.out.println("Experienced a socket timeout when trying to cancel.");
 		}
 	}
 	

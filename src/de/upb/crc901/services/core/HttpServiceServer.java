@@ -32,6 +32,7 @@ import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -46,6 +47,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+
+import javax.sql.ConnectionEvent;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -274,8 +277,12 @@ public class HttpServiceServer {
 					}
 					returnBody.addKeyworkArgument(key, (JASEDataObject) answerObject);
 				}
-			} catch (InvocationTargetException e) {
-				e.getTargetException().printStackTrace();
+			} catch (ConnectException e) {
+				logger.error("Received connect exception. Message: {}", e.getMessage());
+				exceptions.add(e);
+			}
+			catch (InvocationTargetException e) {
+				logger.error("Received invocation target exception. Exception: {}. Message: {}", e.getTargetException().getClass(), e.getTargetException().getMessage());
 				exceptions.add(e);
 			} catch (Throwable e) {
 				e.printStackTrace();
@@ -608,7 +615,7 @@ public class HttpServiceServer {
 					logger.debug("Invocation done. Result is: {}", basicResult);
 				}
 			} catch (IOException e) {
-				e.printStackTrace();
+				logger.error("Recognized exception {} with message {}", e.getClass().getName(), e.getMessage());
 				throw new RuntimeException(e);
 			}
 		}
@@ -749,7 +756,7 @@ public class HttpServiceServer {
 		server.start();
 		logger.info("Server is up ...");
 		
-		HttpServiceObserver.StartServer();
+		HttpServiceObserver.StartServer(port + 1000);
 	}
 	
 	public void shutdown() {
