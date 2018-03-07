@@ -514,17 +514,18 @@ public class HttpServiceServer {
 			boolean serializationSuccess = false; // be pessimistic about result. Set to true if it worked.
 			// if wrapped and wrappers'delegate can be serialized or it wasn't wrapped and the service itself can be serialized.
 			
-			if (newService instanceof Serializable) {  
-				/* serialize result */
-				try {
-					FileUtil.serializeObject(wrapped ? wrapper : newService, getServicePath(opPieces.getClasspath(), id));
-					// no problems occurred.. success
-					serializationSuccess = true;
-				} catch (IOException e) {
-					logger.error(e.getMessage() + "\n" + Arrays.toString(e.getStackTrace()));
-				}
-			}
-			
+//			if (newService instanceof Serializable) {  
+//				/* serialize result */
+//				try {
+//					FileUtil.serializeObject(wrapped ? wrapper : newService, getServicePath(opPieces.getClasspath(), id));
+//					// no problems occurred.. success
+//					serializationSuccess = true;
+//				} catch (IOException e) {
+//					logger.error(e.getMessage() + "\n" + Arrays.toString(e.getStackTrace()));
+//				}
+//			}
+			ServiceManager.SINGLETON().addService(sh);
+			serializationSuccess = true;
 			if(!serializationSuccess) {
 				// serialization wasn't successful.
 				sh = sh.unsuccessedSerialize();
@@ -553,8 +554,9 @@ public class HttpServiceServer {
 					if(emptyHandler.containService()) {
 						handler = emptyHandler;
 					} else {
-						Object service = FileUtil.unserializeObject(getServicePath(emptyHandler.getClasspath(), emptyHandler.getId()));
-						handler = emptyHandler.withService(service);
+//						Object service = FileUtil.unserializeObject(getServicePath(emptyHandler.getClasspath(), emptyHandler.getId()));
+//						handler = emptyHandler.withService(service);
+						handler = ServiceManager.SINGLETON().getHandle(emptyHandler.getId());
 						// replace the servicehandler in state so that next time the service is already unserialized:
 						envState.addField(opPieces.getServiceName(), otms.objectToSemantic(handler));
 					}
@@ -601,15 +603,16 @@ public class HttpServiceServer {
 					e.printStackTrace();
 					throw new RuntimeException(operationInvocation + " error: " + e.getMessage());
 				}
-				if(handler.isSerialized()) {
-					try {	
-						FileUtil.serializeObject(handler.getService(), getServicePath(handler.getClasspath(), handler.getId()));
-					}
-					catch(Exception ex) {
-						logger.error("Can't serialize class: " + handler.getClasspath()+ ". Serialization throws Exception: " + ex.getMessage());
-						ex.printStackTrace();
-					}
-				}
+//				if(handler.isSerialized()) {
+//					try {	
+//						FileUtil.serializeObject(handler.getService(), getServicePath(handler.getClasspath(), handler.getId()));
+//					}
+//					catch(Exception ex) {
+//						logger.error("Can't serialize class: " + handler.getClasspath()+ ". Serialization throws Exception: " + ex.getMessage());
+//						ex.printStackTrace();
+//					}
+//				}
+				ServiceManager.SINGLETON().addService(handler);
 				resultKeywordMap = classesConfig.getMethodResultMap(handler.getClasspath(), opPieces.getMethodname());
 				if (logger.isDebugEnabled()) {
 					logger.debug("Invocation done. Result is: {}", basicResult);
