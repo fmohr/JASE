@@ -27,7 +27,7 @@ import java.util.Objects;
  * 
  */
 public final class EasyClient {
-
+	
 	private HttpBody body;
 	private ServiceHandle innerHandle;
 
