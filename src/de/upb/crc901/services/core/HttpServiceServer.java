@@ -70,7 +70,7 @@ public class HttpServiceServer {
 
 	private static final Logger logger = LoggerFactory.getLogger(HttpServiceServer.class);
 
-	private static File folder = new File("http");
+	private static final File folder = new File("http");
 
 	private final HttpServer server;
 	private final OntologicalTypeMarshallingSystem otms;
@@ -539,9 +539,10 @@ public class HttpServiceServer {
 				ServiceHandle handler = null;
 				if (opPieces.hasClasspathAndId()) {
 					// load from disk:
-					Object service = FileUtil
-							.unserializeObject(getServicePath(opPieces.getClasspath(), opPieces.getId()));
-					handler = new ServiceHandle(opPieces.getClasspath(), opPieces.getId(), service);
+//					Object service = FileUtil
+//							.unserializeObject(getServicePath(opPieces.getClasspath(), opPieces.getId()));
+//					handler = new ServiceHandle(opPieces.getClasspath(), opPieces.getId(), service);
+					handler = ServiceManager.SINGLETON().getHandle(opPieces.getClasspath(), opPieces.getId());
 				} else {
 					if (!envState.containsField(opPieces.getServiceName())) {
 						throw new RuntimeException("The handler wasn't found in the state.");
@@ -556,7 +557,7 @@ public class HttpServiceServer {
 					} else {
 //						Object service = FileUtil.unserializeObject(getServicePath(emptyHandler.getClasspath(), emptyHandler.getId()));
 //						handler = emptyHandler.withService(service);
-						handler = ServiceManager.SINGLETON().getHandle(emptyHandler.getId());
+						handler = ServiceManager.SINGLETON().getHandle(emptyHandler.getClasspath(), emptyHandler.getId());
 						// replace the servicehandler in state so that next time the service is already unserialized:
 						envState.addField(opPieces.getServiceName(), otms.objectToSemantic(handler));
 					}
@@ -617,7 +618,7 @@ public class HttpServiceServer {
 				if (logger.isDebugEnabled()) {
 					logger.debug("Invocation done. Result is: {}", basicResult);
 				}
-			} catch (IOException e) {
+			} catch (Exception e) {
 				logger.error("Recognized exception {} with message {}", e.getClass().getName(), e.getMessage());
 				throw new RuntimeException(e);
 			}
@@ -658,15 +659,15 @@ public class HttpServiceServer {
 		}
 	}
 	
-	/**
-	 * Creates the file path for the given classpath and serviceid.
-	 * @param serviceClasspath classpath of the service.
-	 * @param serviceId id of the service.
-	 * @return file path to the service.
-	 */
-	private String getServicePath(String serviceClasspath, String serviceId) {
-		return folder + File.separator + "objects" + File.separator + serviceClasspath + File.separator + serviceId;
-	}
+//	/**
+//	 * Creates the file path for the given classpath and serviceid.
+//	 * @param serviceClasspath classpath of the service.
+//	 * @param serviceId id of the service.
+//	 * @return file path to the service.
+//	 */
+//	private String getServicePath(String serviceClasspath, String serviceId) {
+//		return folder + File.separator + "objects" + File.separator + serviceClasspath + File.separator + serviceId;
+//	}
 
 	private Constructor<?> getConstructor(Class<?> clazz, List<JASEDataObject> inputs) {
 		if (!classesConfig.classknown(clazz.getName())) {
