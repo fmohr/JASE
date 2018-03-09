@@ -23,17 +23,19 @@ public class WekaAttributeSelectionWrapper extends ServiceWrapper {
 	private Attribute cachedClassAttribute;
 	private Instances cachedInstances;
 	
-	private boolean trained = false;
+	
 	
 	
 	public WekaAttributeSelectionWrapper(Constructor<? extends Object> delegateConstructor, JASEDataObject[] values) {
 		super(delegateConstructor, values);
 	}
 	
+	public void train(Instances instances) throws Exception {
+		this.SelectAttributes(instances);
+	}
+	
 	public Instances preprocess(Instances instances) throws Exception {
-		if(!trained) {
-			this.SelectAttributes(instances);
-		}
+		this.SelectAttributes(instances);
 		return this.reduceDimensionality(instances);
 	}
 	
@@ -43,7 +45,6 @@ public class WekaAttributeSelectionWrapper extends ServiceWrapper {
 			cachedInstances = new Instances(instances, 0);
 		}
 		((AttributeSelection)delegate).SelectAttributes(instances);
-		trained = true;
 	}
 	
 	public Instance reduceDimensionality(Instance instance) throws Exception {
