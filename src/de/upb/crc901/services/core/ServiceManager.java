@@ -87,9 +87,9 @@ public class ServiceManager {
 		}
 		// wasn't found in cache.
 		Object service = FileUtil.unserializeObject(getServicePath(classpath, id_));
-		ServiceHandle sh = new ServiceHandle(classpath, id_);
+		ServiceHandle sh = new ServiceHandle(classpath, id_).withService(service);
 		addService(sh);
-		return sh.withService(service);
+		return sh;
 //		throw new RuntimeException("This service is not cached anymore: " + classpath + ":" + id_ + ". nor was it found on disk.");
 	}
 	

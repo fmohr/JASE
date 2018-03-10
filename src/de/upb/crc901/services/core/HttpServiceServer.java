@@ -562,6 +562,9 @@ public class HttpServiceServer {
 						envState.addField(opPieces.getServiceName(), otms.objectToSemantic(handler));
 					}
 				}
+				if(!handler.containService()) {
+					throw new RuntimeException("Service of class " + handler.getClasspath() + " with id " + handler.getId() + " is null."); 
+				}
 				boolean wrapped = classesConfig.isWrapped(handler.getClasspath());
 				boolean delegate = false; // if delegate equals true then the wrapper doesn't overwrite the method.
 				Method method = null;
@@ -599,9 +602,16 @@ public class HttpServiceServer {
 						// No delegation method can be found in class from the object of service:
 						basicResult = method.invoke(handler.getService(), inputArgs);
 					}
-				} catch (Exception e) {
+				} 
+				catch (InvocationTargetException invException) {
+					Throwable e = invException.getTargetException();
 					logger.error(operationInvocation + " error: " + e.getMessage());
-					e.printStackTrace();
+//					e.printStackTrace();
+					throw new RuntimeException(operationInvocation + " error: " + e.getMessage());
+				}
+				catch (Exception e) {
+					logger.error(operationInvocation + " error: " + e.getMessage());
+//					e.printStackTrace();
 					throw new RuntimeException(operationInvocation + " error: " + e.getMessage());
 				}
 //				if(handler.isSerialized()) {
