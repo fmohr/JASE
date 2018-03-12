@@ -35,7 +35,6 @@ public class WekaAttributeSelectionWrapper extends ServiceWrapper {
 	}
 	
 	public Instances preprocess(Instances instances) throws Exception {
-		this.SelectAttributes(instances);
 		return this.reduceDimensionality(instances);
 	}
 	
