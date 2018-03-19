@@ -35,9 +35,9 @@ public class ServiceManager {
 		}
 	}
 	
-	private void maintainCache() {
+	private synchronized void maintainCache() throws IOException {
 		Iterator<ServiceData> iterator = cachedServices.iterator();
-		while(iterator.hasNext()) {
+		while (iterator.hasNext()) {
 			ServiceData cachedService = iterator.next();
 			if(cachedService.hasChanceLeft()) {
 				cachedService.addChance();
@@ -47,12 +47,8 @@ public class ServiceManager {
 				Object service = cachedService.handler.getService();
 				if (service instanceof Serializable) {  
 					/* serialize result */
-					try {
 						FileUtil.serializeObject(service, 
 								getServicePath(cachedService.handler.getClasspath(), cachedService.handler.getId()));
-					} catch (IOException e) {
-						throw new RuntimeException(e);
-					}
 				}
 			}
 		}
@@ -69,7 +65,7 @@ public class ServiceManager {
 		}
 	}
 	
-	public synchronized void addService(ServiceHandle handle) {
+	public synchronized void addService(ServiceHandle handle) throws IOException {
 		maintainCache();
 		// Delete already already cached services
 		removeServiceWithId(handle.getId());

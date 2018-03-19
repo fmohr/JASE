@@ -23,15 +23,13 @@ package de.upb.crc901.services.core;
 
 import java.util.HashMap;
 
-import com.fasterxml.jackson.databind.JsonNode;
-
 @SuppressWarnings("serial")
 public class ServiceCompositionResult extends HashMap<String, JASEDataObject> {
 
 	public void addBody(HttpBody returnedBody) {
 		for(String field : returnedBody.getState().currentFieldNames()) {
 			JASEDataObject jdo = returnedBody.getState().retrieveField(field);
-			super.put(field, jdo);
+			this.put(field, jdo);
 		}
 	}
 //	/**
@@ -49,6 +47,5 @@ public class ServiceCompositionResult extends HashMap<String, JASEDataObject> {
 //			return jdo;
 //		}
 //	}
-	
 
 }

@@ -6,25 +6,19 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
-import de.upb.crc901.services.ExchangeTest;
 import de.upb.crc901.services.core.JASEDataObject;
 import de.upb.crc901.services.core.ServiceWrapper;
 import de.upb.crc901.services.core.TimeLogger;
-import jaicore.basic.MathExt;
 import jaicore.ml.core.SimpleInstancesImpl;
 import jaicore.ml.core.SimpleLabeledInstancesImpl;
 import jaicore.ml.interfaces.Instance;
 import jaicore.ml.interfaces.LabeledInstance;
 import jaicore.ml.interfaces.LabeledInstances;
-import weka.attributeSelection.ASEvaluation;
-import weka.attributeSelection.ASSearch;
-import weka.attributeSelection.AttributeSelection;
 import weka.classifiers.Classifier;
 import weka.core.Attribute;
 import weka.core.DenseInstance;
 import weka.core.Instances;
 import weka.core.OptionHandler;
-import weka.core.SparseInstance;
 import weka.core.Utils;
 
 /**
@@ -39,7 +33,6 @@ public class WekaClassifierWrapper extends ServiceWrapper {
 	// shall not change.
 	public WekaClassifierWrapper(Constructor<? extends Object> delegateConstructor, JASEDataObject[] values) {
 		super(delegateConstructor, values);
-
 	}
 	
 
@@ -84,48 +77,11 @@ public class WekaClassifierWrapper extends ServiceWrapper {
 	 */
 	private static final long serialVersionUID = 1L;
 
-	/**
-	 * When false, this flag indicates that this classifier hasn't been trained
-	 * before thus the attributeList is unassigned. If this flag is set to true,
-	 * incoming training data will be checked to have the same column size as the
-	 * first column size.
-	 */
-	private boolean attributesAssignedFlag = false;
-
 	/** A list of Attribute which is only assigned once in collectAttributes. */
 	private ArrayList<Attribute> attributeList;
 
 	/** Use TreeSet to get O(log(n)) time for add and contains. */
 	private Set<String> classLabelSet = new TreeSet<String>();
-
-	/**
-	 * If not attributesAssignedFlag, this method fills the attributeList based on
-	 * the amount of attributes. Else it will throw an Exception indicating that the
-	 * data doesn't match with data received before.
-	 * 
-	 * @param attributeCount
-	 *            amount of data in each instance
-	 */
-	private void checkAttributes(int attributeCount) {
-		if (!attributesAssignedFlag) {
-			/* create basic attribute entries */
-			this.attributeList = new ArrayList<>(attributeCount);
-			for (int i = 1; i <= attributeCount; i++) {
-				this.attributeList.add(new Attribute("a" + i));
-			}
-			// set a dummy attribute as the last item in the list. this will be set again in
-			// the create
-			this.attributeList.add(new Attribute("label"));
-			// flag is now true forever.
-			attributesAssignedFlag = true;
-		} else {
-			/* Check if the data size matches the previous invocations. */
-			if (attributeCount != attributeList.size() - 1) { // -1 because attributeList contains a label field.
-				throw new RuntimeException("Data column size (=" + attributeCount
-						+ ") doesn't match previous data column size(=" + (attributeList.size() - 1) + ").");
-			}
-		}
-	}
 
 	/**
 	 * This method receives a LabeledInstances object and expands the classLabelSet
@@ -191,12 +147,17 @@ public class WekaClassifierWrapper extends ServiceWrapper {
 		if (trainingData.getNumberOfRows() < 1) { // no data. do nothing.
 			return; // :(
 		}
-		// does the data match in column size?
-		checkAttributes(trainingData.getNumberOfColumns());
-		// store the classes defined in the given data if it didn't happen before.
-		if (!declaredClasses) {
-			declare_classes(trainingData);
+		
+		/* create the attribute list. This is reset if the classifier is trained again. */
+		int attributeCount = trainingData.getNumberOfColumns();
+		this.attributeList = new ArrayList<>(attributeCount);
+		for (int i = 1; i <= attributeCount; i++) {
+			this.attributeList.add(new Attribute("a" + i));
 		}
+		this.attributeList.add(new Attribute("label"));
+		
+		/* store the classes defined in the given data */
+		declare_classes(trainingData);
 
 		// Now create a weka.core.Instances object and fill our data to it.
 		Instances trainingInstances = createWekaInstances(trainingData);
