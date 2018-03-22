@@ -81,7 +81,6 @@ public class HttpServiceClient {
 		TimeLogger.STOP_TIME("Sending data started");
 		
 		Operation op = body.getOperation(0).getOperation();
-		System.out.println(op);
 		
 		/* send data */
 		Runtime runtime = Runtime.getRuntime();
@@ -92,10 +91,6 @@ public class HttpServiceClient {
 		TimeLogger.STOP_TIME("Sending data concluded");
 		out.close();
 		logger.info("Data sending process completed for {}. Currently used memory: {}MB", body.getComposition(), (runtime.totalMemory() - runtime.freeMemory()) / mb);
-		
-		if (op.getName().contains("train")) {
-			System.exit(0);
-		}
 		
 		HttpBody returnedBody = new HttpBody();
 		/* read and return answer */

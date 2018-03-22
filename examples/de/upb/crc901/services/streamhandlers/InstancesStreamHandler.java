@@ -73,7 +73,7 @@ public class InstancesStreamHandler implements StreamHandler<Instances>{
 				}
 			}
 		}
-		System.out.println("\n\n\n------------->Zero ratio : "  + zeroRatio +"\n\n\n");
+//		System.out.println("\n\n\n------------->Zero ratio : "  + zeroRatio +"\n\n\n");
 		return (zeroRatio > 0.5);
 	}
 
