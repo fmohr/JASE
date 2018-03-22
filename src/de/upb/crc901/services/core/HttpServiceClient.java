@@ -45,6 +45,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import de.upb.crc901.configurationsetting.compositiondomain.CompositionDomain;
+import de.upb.crc901.configurationsetting.operation.Operation;
 import de.upb.crc901.configurationsetting.operation.OperationInvocation;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
 import de.upb.crc901.configurationsetting.serialization.SequentialCompositionSerializer;
@@ -79,11 +80,23 @@ public class HttpServiceClient {
 		con.setDoOutput(true);
 		TimeLogger.STOP_TIME("Sending data started");
 		
+		Operation op = body.getOperation(0).getOperation();
+		System.out.println(op);
+		
 		/* send data */
+		Runtime runtime = Runtime.getRuntime();
+		int mb = 1024 * 1024;
+		logger.info("Data sending process starts for {}. Currently used memory: {}MB", body.getComposition(), (runtime.totalMemory() - runtime.freeMemory()) / mb);
 		OutputStream out = con.getOutputStream();
 		body.writeBody(out);
 		TimeLogger.STOP_TIME("Sending data concluded");
 		out.close();
+		logger.info("Data sending process completed for {}. Currently used memory: {}MB", body.getComposition(), (runtime.totalMemory() - runtime.freeMemory()) / mb);
+		
+		if (op.getName().contains("train")) {
+			System.exit(0);
+		}
+		
 		HttpBody returnedBody = new HttpBody();
 		/* read and return answer */
 		
@@ -125,8 +138,6 @@ public class HttpServiceClient {
 			con.disconnect();
 			throw e;
 		}
-
-		
 		
 		if(responseCode.get() == 200) {
 			try (InputStream in = con.getInputStream()){
