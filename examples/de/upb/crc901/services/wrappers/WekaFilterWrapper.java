@@ -22,6 +22,13 @@ public class WekaFilterWrapper extends ServiceWrapper{
 		super(delegateConstructor, values);
 	}
 	
+	public void train(Instances instances) throws Exception {
+		try {
+			((Filter) super.delegate).setInputFormat(instances);
+		} catch(Exception ex) {
+			ex.printStackTrace();
+		}
+	}
 	/**
 	 * Applies the useFilter function from Filter using the wrapped filter, delegate. 
 	 * @param instances Data to be preprocessed.

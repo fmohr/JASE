@@ -286,7 +286,6 @@ public final class HttpBody {
 			handler = (StreamHandler<?>) streamHandlerClass.getConstructor().newInstance();
 		} catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException
 				| NoSuchMethodException | SecurityException e) {
-			e.printStackTrace();
 			throw new RuntimeException(e); // mask exception
 		}
 
@@ -297,7 +296,6 @@ public final class HttpBody {
 		try {
 			write.invoke(handler, jsonOut, jdo.getData());
 		} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-			e.printStackTrace();
 			throw new RuntimeException(e);
 		}
 	}
@@ -402,14 +400,9 @@ public final class HttpBody {
 						+ ")\" in streamhandler class " + streamHandlerClassName;
 
 				return read.invoke(handler, jsonIn);
-			} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-				e.printStackTrace();
-			} catch (ClassNotFoundException e) {
-				e.printStackTrace();
-			} catch (InstantiationException | NoSuchMethodException | SecurityException e) {
-				e.printStackTrace();
+			} catch (Exception e) {
+				throw new RuntimeException(e);
 			}
-			return null;
 		}
 	}
 

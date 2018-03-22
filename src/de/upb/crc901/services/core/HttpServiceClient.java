@@ -41,10 +41,11 @@ import java.util.stream.Collectors;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.math.NumberUtils;
-
-import com.fasterxml.jackson.core.io.DataOutputAsStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import de.upb.crc901.configurationsetting.compositiondomain.CompositionDomain;
+import de.upb.crc901.configurationsetting.operation.Operation;
 import de.upb.crc901.configurationsetting.operation.OperationInvocation;
 import de.upb.crc901.configurationsetting.operation.SequentialComposition;
 import de.upb.crc901.configurationsetting.serialization.SequentialCompositionSerializer;
@@ -53,6 +54,7 @@ import jaicore.logic.fol.structure.LiteralParam;
 
 public class HttpServiceClient {
 	
+	private static final Logger logger = LoggerFactory.getLogger(HttpServiceClient.class);
 	public static String hostForCancelation;
 
 	private final OntologicalTypeMarshallingSystem otms;
@@ -62,12 +64,12 @@ public class HttpServiceClient {
 		this.otms = otms;
 		
 	}
-	public ServiceCompositionResult sendCompositionRequest(String host, HttpBody body) throws IOException {
+	public ServiceCompositionResult sendCompositionRequest(String host, HttpBody body) throws IOException, InterruptedException {
 		// use choreography specific url
 		return sendRequest(host, "choreography", body);
 	}
 
-	public ServiceCompositionResult sendRequest(String host, String operation, HttpBody body) throws IOException {
+	public ServiceCompositionResult sendRequest(String host, String operation, HttpBody body) throws IOException, InterruptedException {
 		URL url = new URL("http://" + host + "/" + operation);
 		translateServiceHandlers(body.getState(), host, "local");
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
@@ -78,11 +80,23 @@ public class HttpServiceClient {
 		con.setDoOutput(true);
 		TimeLogger.STOP_TIME("Sending data started");
 		
+		Operation op = body.getOperation(0).getOperation();
+		System.out.println(op);
+		
 		/* send data */
+		Runtime runtime = Runtime.getRuntime();
+		int mb = 1024 * 1024;
+		logger.info("Data sending process starts for {}. Currently used memory: {}MB", body.getComposition(), (runtime.totalMemory() - runtime.freeMemory()) / mb);
 		OutputStream out = con.getOutputStream();
 		body.writeBody(out);
 		TimeLogger.STOP_TIME("Sending data concluded");
 		out.close();
+		logger.info("Data sending process completed for {}. Currently used memory: {}MB", body.getComposition(), (runtime.totalMemory() - runtime.freeMemory()) / mb);
+		
+		if (op.getName().contains("train")) {
+			System.exit(0);
+		}
+		
 		HttpBody returnedBody = new HttpBody();
 		/* read and return answer */
 		
@@ -99,10 +113,11 @@ public class HttpServiceClient {
 				}
 				catch (SocketException e) {
 					if (e.getMessage().equalsIgnoreCase("Socket closed")) {
-						System.out.println("Socket has been closed. Finishing thread that waits for response code.");
+						logger.error("Socket has been closed. Finishing thread that waits for response code.");
 					}
-					else
-						e.printStackTrace();
+					else {
+						logger.error("Unexpected exception {} with message: {}", e.getClass().getName(), e.getMessage());
+					}
 				}
 				catch (IOException e) {
 					e.printStackTrace();
@@ -117,14 +132,12 @@ public class HttpServiceClient {
 		/* wait for response of server. In case of timeout, close connection (and thereby notify server that the process is canceled) */
 		try {
 			s.acquire();
-		} catch (Throwable e) {
-			System.out.println("DISCONNECTING");
+		} catch (InterruptedException e) {
+			logger.info("Disconnecting and sending cancel request");
 			sendCancelRequest();
 			con.disconnect();
-			throw new RuntimeException(e);
+			throw e;
 		}
-
-		
 		
 		if(responseCode.get() == 200) {
 			try (InputStream in = con.getInputStream()){
@@ -135,17 +148,26 @@ public class HttpServiceClient {
 			catch(Exception ex) {
 				ex.printStackTrace();
 			}
+			logger.info("Received answer: " + returnedBody.getState().currentFieldNames().toString().replaceAll("\\n", "\\t"));
 			ServiceCompositionResult result = new ServiceCompositionResult();
+			logger.debug("Adding " + returnedBody.getState().currentFieldNames() + " to results replacing local by " + host);
 			translateServiceHandlers(returnedBody.getState(), "local", host);
+			logger.debug("Result: " + returnedBody.getState().currentFieldNames());
 			result.addBody(returnedBody);
+			logger.debug("Effect of adding returned body to result: " + result);
 			return result;
 		} else {
+			String theString = "";
 			try (InputStream in = con.getErrorStream()) {
-				String theString = IOUtils.toString(in, Charset.defaultCharset());
-				throw new RuntimeException(theString.replaceAll("\n", "\n\t\t"));
-			}catch(IOException ex) {
-				throw ex;
+				theString = IOUtils.toString(in, Charset.defaultCharset());
+				synchronized (logger) {
+					logger.warn("Received response code {} from server. Use DEBUG flag for this class to print the whole returned body.", responseCode.get());
+					if (logger.isDebugEnabled()) {
+						logger.debug("Here is the body:\n\t{}", theString.replaceAll("\n", "\n\t"));
+					}
+				}
 			}
+			throw new RuntimeException(theString.replaceAll("\n", "\n\t\t"));
 		}
 	}
 	
@@ -186,23 +208,23 @@ public class HttpServiceClient {
 		}
 	}
 	@Deprecated
-	public ServiceCompositionResult callServiceOperation(String serviceCall, Object... inputs) throws IOException {
+	public ServiceCompositionResult callServiceOperation(String serviceCall, Object... inputs) throws IOException, InterruptedException {
 		return callServiceOperation(ServiceUtil.getOperationInvocation(serviceCall, inputs), new SequentialComposition(new CompositionDomain()), inputs);
 	}
 
 	@Deprecated
-	public ServiceCompositionResult callServiceOperation(OperationInvocation call, SequentialComposition coreography) throws IOException {
+	public ServiceCompositionResult callServiceOperation(OperationInvocation call, SequentialComposition coreography) throws IOException, InterruptedException {
 		return callServiceOperation(call, coreography, new HashMap<>());
 	}
 
 	@Deprecated
-	public ServiceCompositionResult callServiceOperation(OperationInvocation call, SequentialComposition coreography, Object... additionalInputs) throws IOException {
+	public ServiceCompositionResult callServiceOperation(OperationInvocation call, SequentialComposition coreography, Object... additionalInputs) throws IOException, InterruptedException {
 		
 		return callServiceOperation(call, coreography, ServiceUtil.getObjectInputMap(additionalInputs));
 	}
 
 	@Deprecated
-	public ServiceCompositionResult callServiceOperation(OperationInvocation call, SequentialComposition coreography, Map<String, Object> additionalInputs) throws IOException {
+	public ServiceCompositionResult callServiceOperation(OperationInvocation call, SequentialComposition coreography, Map<String, Object> additionalInputs) throws IOException, InterruptedException {
 		
 		/* prepare data */
 		// TODO coreography should have a indexof method
@@ -270,7 +292,7 @@ public class HttpServiceClient {
 	
 
 	@Deprecated
-	public ServiceCompositionResult invokeServiceComposition(SequentialComposition composition, Map<String, Object> inputs) throws IOException {
+	public ServiceCompositionResult invokeServiceComposition(SequentialComposition composition, Map<String, Object> inputs) throws IOException, InterruptedException {
 
 		/* check first that all inputs are given */
 		Collection<String> availableInputs = new HashSet<>(inputs.keySet());
@@ -290,7 +312,7 @@ public class HttpServiceClient {
 	}
 
 	@Deprecated
-	public ServiceCompositionResult invokeServiceComposition(SequentialComposition composition, Object... additionalInputs) throws IOException {
+	public ServiceCompositionResult invokeServiceComposition(SequentialComposition composition, Object... additionalInputs) throws IOException, InterruptedException {
 		return invokeServiceComposition(composition, ServiceUtil.getObjectInputMap(additionalInputs));
 	}
 }
