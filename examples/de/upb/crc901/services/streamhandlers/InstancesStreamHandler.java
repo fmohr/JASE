@@ -37,6 +37,7 @@ public class InstancesStreamHandler implements StreamHandler<Instances>{
 
 	@Override
 	public void write(JsonGenerator jsonOut, Instances data) throws IOException {
+		
 		writeList(jsonOut, data);
 	}
 	
@@ -46,7 +47,7 @@ public class InstancesStreamHandler implements StreamHandler<Instances>{
 	public void writeList(JsonGenerator jsonOut, List<? extends Instance> data) throws IOException {
 		jsonOut.writeStartArray();
 		for(Instance instance : data) {
-			instanceHandlerDelegate.write(jsonOut, instance);
+			instanceHandlerDelegate.write(jsonOut, instance,  shouldBeSparsed(data));
 		}
 		jsonOut.writeEndArray();
 	}
@@ -54,6 +55,26 @@ public class InstancesStreamHandler implements StreamHandler<Instances>{
 	@Override
 	public Class<Instances> getSupportedSemanticClass() {
 		return Instances.class;
+	}
+	
+	private boolean shouldBeSparsed(List<? extends Instance> data) {
+		int testrange = 10;
+		if(data.size() < testrange) {
+			return false; // dont sparse small data
+		}
+		
+		double zeroRatio = 0;
+		double eachZeroRatio = 1. / ((double)(testrange*data.get(0).size())); // how much each 0 entry contribute
+		for(int index = 0; index < testrange; index++) {
+			Instance instance = data.get(index);
+			for(double value : instance) {
+				if(value == 0) {
+					zeroRatio += eachZeroRatio;
+				}
+			}
+		}
+		System.out.println("\n\n\n------------->Zero ratio : "  + zeroRatio +"\n\n\n");
+		return (zeroRatio > 0.5);
 	}
 
 }
