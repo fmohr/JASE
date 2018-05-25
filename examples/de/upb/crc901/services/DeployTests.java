@@ -104,23 +104,23 @@ public class DeployTests {
   public void tearDown() throws Exception {
   }
 
-  @Test
-  public void test_preproPase_classifyPase() throws FileNotFoundException, IOException {
+  // @Test
+  public void test_preproPase_classifyPase() throws FileNotFoundException, IOException, InterruptedException {
     List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .1f, .8f);
     ServiceCompositionResult result = this.executeComposition("testrsc/deployPase.txt", split.get(0), split.get(1), split.get(2));
     System.out.println("Prediction accuracy Scikit RandomForestClassifier: " + result.get("Accuracy").getData());
   }
 
-  @Test
-  public void test_preproPase_classifyJase() throws FileNotFoundException, IOException {
+  // @Test
+  public void test_preproPase_classifyJase() throws FileNotFoundException, IOException, InterruptedException {
     List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .1f, .8f);
     ServiceCompositionResult result = this.executeComposition("testrsc/deployJase.txt", split.get(0), split.get(1), split.get(2));
     System.out.println("Prediction accuracy Weka RandomForest: " + result.get("Accuracy").getData());
     Assert.assertEquals("localhost:8000", ((ServiceHandle) result.get("forestmodel").getData()).getHost());
   }
 
-  @Test
-  public void test_nn_tensorflow() throws IOException {
+  // @Test
+  public void test_nn_tensorflow() throws IOException, InterruptedException {
     List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .8f, .14f, 0.05f);
     ServiceCompositionResult result = this.executeComposition("testrsc/nn_tf.txt", split.get(0), split.get(1), split.get(2));
     System.out.println("Prediction accuracy MLP TF: " + result.get("Accuracy").getData());
@@ -129,45 +129,45 @@ public class DeployTests {
 
   }
 
-   @Test
-  public void test_nn_weka() throws IOException {
+  @Test
+  public void test_nn_weka() throws IOException, InterruptedException {
     List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .8f, .14f, 0.05f);
     ServiceCompositionResult result = this.executeComposition("testrsc/nn_weka.txt", split.get(0), split.get(1), split.get(2));
     System.out.println("Prediction accuracy MLP Weka: " + result.get("Accuracy").getData());
-//    List<Double> predictions = (List<Double>) result.get("Predictions").getData();
+    // List<Double> predictions = (List<Double>) result.get("Predictions").getData();
     // System.out.println("Predictions by NN TF: " + predictions);
   }
 
-   @Test
-  public void test_nn_scikit() throws IOException {
+  // @Test
+  public void test_nn_scikit() throws IOException, InterruptedException {
     List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .1f, .7f, 0.2f);
     ServiceCompositionResult result = this.executeComposition("testrsc/nn_sk.txt", split.get(0), split.get(1), split.get(2));
     System.out.println("Prediction accuracy MLP SK: " + result.get("Accuracy").getData());
   }
-   
+
   @Test
   public void timeoutTest() throws IOException, InterruptedException {
-	  List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .8f, .14f, 0.05f);
-	  // test java interrupt
-	  Thread clientThread = new Thread( () -> {
-		  	try {
-				this.executeComposition("testrsc/nn_weka.txt", split.get(0), split.get(1), split.get(2));
-			} catch (Exception e) {
-				e.printStackTrace();
-			} 
-			try {
-				this.executeComposition("testrsc/nn_weka.txt", split.get(0), split.get(1), split.get(2));
-			} catch (Exception e) {
-				e.printStackTrace();
-			} 
-	  });
-	  clientThread.start();
-	  Thread.sleep(2000);
-	  clientThread.stop();
-	  clientThread.join();
+    List<Instances> split = WekaUtil.getStratifiedSplit(wekaInstances, new Random(0), .8f, .14f, 0.05f);
+    // test java interrupt
+    Thread clientThread = new Thread(() -> {
+      try {
+        this.executeComposition("testrsc/nn_weka.txt", split.get(0), split.get(1), split.get(2));
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
+      try {
+        this.executeComposition("testrsc/nn_weka.txt", split.get(0), split.get(1), split.get(2));
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
+    });
+    clientThread.start();
+    Thread.sleep(2000);
+    clientThread.stop();
+    clientThread.join();
   }
 
-  private ServiceCompositionResult executeComposition(final String filePath, final Object... inputs) throws IOException {
+  private ServiceCompositionResult executeComposition(final String filePath, final Object... inputs) throws IOException, InterruptedException {
     /* load composition */
     List<String> compositionList = FileUtil.readFileAsList(filePath);
     SequentialCompositionSerializer sqs = new SequentialCompositionSerializer();
@@ -177,10 +177,8 @@ public class DeployTests {
     /* return the result */
     return result;
   }
-  
-  
 
-//  @Test
+  // @Test
   public void test_runtime_weka() throws Exception {
     System.out.println("DeployTests:test_runtime_weka() starts");
 
