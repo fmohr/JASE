@@ -267,6 +267,7 @@ public class OntologicalTypeMarshallingSystem {
 //				assert method != null : "Could not find method \"serialize(" + o.getClass() + ")\" in serializer class " + serializerClassName;
 			try {
 				serializer = (IOntologySerializer<?>) Class.forName(serializerClassName).getConstructor().newInstance();
+				serializerCache.put(serializerClassName, serializer);
 			} catch (Exception e) {
 				// cache the info that the serializer couldnt be found:
 				serializerCache.put(serializerClassName, null);

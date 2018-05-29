@@ -79,8 +79,18 @@ public class InstanceStreamHandler implements StreamHandler<Instance> {
 		}
 	}
 
+	@Override
 	public void write(JsonGenerator jsonOut, Instance data) throws IOException {
-		write_sparse(jsonOut, data);
+		write(jsonOut, data, false);
+	}
+	
+	public void write(JsonGenerator jsonOut, Instance data, boolean sparse) throws IOException {
+		if(sparse) {
+			write_sparse(jsonOut, data);
+		}
+		else {
+			write_nonesparse(jsonOut, data);
+		}
 	}
 
 	public void write_sparse(JsonGenerator jsonOut, Instance data) throws IOException {
