@@ -1,4 +1,7 @@
-apply plugin: 'java'
+plugins {
+	id 'java'
+	id 'eclipse-wtp'
+}
 
 sourceSets {
     main {
@@ -29,12 +32,10 @@ artifacts {
 dependencies {
 	
 	// Catalano libraries for image filters and preprocessing
-	compile name: 'CrcServices'
+	compile name: 'CrcUtils'
 	compile name: 'Catalano.Image'
 	compile name: 'Catalano.Math'
 	compile name: 'Catalano.Statistics'
-	compile name: 'CrcServices'
-	compile project(':JAICore')
 
 	// Apache Commons
 	compile 'org.apache.commons:commons-lang3:3.5'
@@ -51,14 +52,21 @@ dependencies {
 	// compile 'com.google.guava:guava:18.0'
 	
 	// Weka
-	compile group: 'nz.ac.waikato.cms.weka', name: 'weka-dev', version: '3.9.1'
 	
 	// Basics
 	compile 'junit:junit:4.12'
 	compile 'org.slf4j:slf4j-api:1.7.13'
 	compile group: 'log4j', name: 'apache-log4j-extras', version: '1.2.17'
+	// https://mvnrepository.com/artifact/com.github.fommil.netlib/core
+	compile group: 'com.github.fommil.netlib', name: 'core', version: '1.1.2'
 
 
+	// dependencies for development time
+ 	compile "de.upb.isys:jaicore-ml"
+ 	compile "de.upb.isys:jaicore-basic"
+ 	compile "de.upb.isys:jaicore-logic"
+	compile group: 'de.upb.isys', name: 'interruptable-weka', version: '0.0.1'
+ 	
 	runtime 'org.slf4j:slf4j-log4j12:1.7.13', 'log4j:log4j:1.2.17'
 	
 	
@@ -79,8 +87,9 @@ repositories {
     flatDir {
     	dirs 'lib'
     }
+    maven { url "https://jitpack.io" }
 	maven {
         url "http://clojars.org/repo/"
-		url "https://jitpack.io"
+        url "https://nexus.cs.upb.de/repository/maven-releases/"
     }
 }

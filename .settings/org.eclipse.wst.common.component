@@ -1,8 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project-modules id="moduleCoreId" project-version="1.5.0">
+<project-modules id="moduleCoreId" project-version="2.0">
 	<wb-module deploy-name="JASE">
 		<wb-resource deploy-path="/" source-path="conf"/>
 		<wb-resource deploy-path="/" source-path="src"/>
 		<wb-resource deploy-path="/" source-path="examples"/>
+		<dependent-module deploy-path="../" handle="module:/resource/jaicore-ml/jaicore-ml">
+			<dependency-type>uses</dependency-type>
+		</dependent-module>
+		<dependent-module deploy-path="../" handle="module:/resource/jaicore-basic/jaicore-basic">
+			<dependency-type>uses</dependency-type>
+		</dependent-module>
+		<dependent-module deploy-path="../" handle="module:/resource/jaicore-search/jaicore-search">
+			<dependency-type>uses</dependency-type>
+		</dependent-module>
+		<dependent-module deploy-path="../" handle="module:/resource/jaicore-graph/jaicore-graph">
+			<dependency-type>uses</dependency-type>
+		</dependent-module>
+		<dependent-module deploy-path="../" handle="module:/resource/jaicore-concurrent/jaicore-concurrent">
+			<dependency-type>uses</dependency-type>
+		</dependent-module>
+		<dependent-module deploy-path="../" handle="module:/resource/jaicore-graphvisualizer/jaicore-graphvisualizer">
+			<dependency-type>uses</dependency-type>
+		</dependent-module>
+		<dependent-module deploy-path="../" handle="module:/resource/jaicore-experiments/jaicore-experiments">
+			<dependency-type>uses</dependency-type>
+		</dependent-module>
+		<dependent-module deploy-path="../" handle="module:/resource/jaicore-logic/jaicore-logic">
+			<dependency-type>uses</dependency-type>
+		</dependent-module>
 	</wb-module>
 </project-modules>
