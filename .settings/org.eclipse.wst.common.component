@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project-modules id="moduleCoreId" project-version="2.0">
-	<wb-module deploy-name="JASE">
+<project-modules id="moduleCoreId" project-version="1.5.0">
+	<wb-module deploy-name="icsoc2018-JASE">
 		<wb-resource deploy-path="/" source-path="conf"/>
 		<wb-resource deploy-path="/" source-path="src"/>
 		<wb-resource deploy-path="/" source-path="examples"/>

@@ -1,6 +1,7 @@
 plugins {
 	id 'java'
 	id 'eclipse-wtp'
+	id 'maven'
 }
 
 sourceSets {
@@ -23,6 +24,23 @@ sourceSets {
 task sourcesJar(type: Jar, dependsOn: classes) {
     classifier = 'sources'
     from sourceSets.main.allSource
+}
+
+task writeNewPom {
+    doLast {
+        pom {
+            project {
+                inceptionYear '2018'
+                licenses {
+                    license {
+                        name 'The Apache Software License, Version 2.0'
+                        url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                        distribution 'repo'
+                    }
+                }
+            }
+        }.writeTo("$buildDir/pom.xml")
+    }
 }
 
 artifacts {
@@ -66,6 +84,7 @@ dependencies {
  	compile "de.upb.isys:jaicore-basic"
  	compile "de.upb.isys:jaicore-logic"
 	compile group: 'de.upb.isys', name: 'interruptable-weka', version: '0.0.1'
+	compile group: 'de.upb.isys', name: 'mtj', version: '0.0.1'
  	
 	runtime 'org.slf4j:slf4j-log4j12:1.7.13', 'log4j:log4j:1.2.17'
 	
@@ -74,10 +93,6 @@ dependencies {
 	
 	// Jackson for JSON (used by JAICore but not contained in the JAR)
 	compile group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.9.0.pr4'
-	
-	
-	compile name: 'mtj'
-	
 
 }
 
